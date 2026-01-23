@@ -753,7 +753,13 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                         {recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((comp, cIdx) => {
                                             const itemName = comp.masterItemName || (comp.receivedGoodId ? getGoodName(comp.receivedGoodId) : '');
                                             // Sort by timestamp to ensure deterministic unit allocation visualization (FIFO)
-                                            const pooled = receivedGoods.filter(g => g.name === itemName || g.id === comp.receivedGoodId).sort((a, b) => a.timestamp - b.timestamp);
+                                            // FIX: Use robust name matching to ensure we catch all batches used
+                                            const pooled = receivedGoods.filter(g => {
+                                                const nameMatch = g.name.trim().toLowerCase() === itemName.trim().toLowerCase();
+                                                const idMatch = g.id === comp.receivedGoodId;
+                                                return nameMatch || idMatch;
+                                            }).sort((a, b) => a.timestamp - b.timestamp);
+                                            
                                             const allSelected = pooled.flatMap(b => (item.consumedSerials || {})[b.id] || []);
                                             const unitSerials = allSelected.slice(uIdx * comp.quantityPerUnit, (uIdx + 1) * comp.quantityPerUnit);
                                             
