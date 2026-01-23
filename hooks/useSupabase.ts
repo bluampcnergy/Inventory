@@ -17,8 +17,19 @@ export function useSupabase<T>(
   useEffect(() => {
     const fetch = async () => {
       try {
+        // Prepare query
+        let query = supabase.from(tableName).select('*');
+        
+        // Optimisation: For large tables like test_results or logs, sort by timestamp desc to get recent data first
+        // within the range limit.
+        if (tableName === 'test_results' || tableName === 'logs' || tableName === 'received_goods' || tableName === 'finished_goods') {
+             // We assume these tables have a 'timestamp' column based on schema
+             query = query.order('timestamp', { ascending: false });
+        }
+
         // Increased range limit to prevent data loss on large tables (default is 1000)
-        const { data: dbData, error } = await supabase.from(tableName).select('*').range(0, 50000);
+        // We use 50,000 to cover typical plant operations.
+        const { data: dbData, error } = await query.range(0, 50000);
         
         if (error) {
           // Check for specific Supabase errors that indicate configuration issues
@@ -60,19 +71,36 @@ export function useSupabase<T>(
         .filter((item: any) => !newIds.has(String(item[idKey])))
         .map((item: any) => String(item[idKey]));
 
+    const CHUNK_SIZE = 100; // Safe batch size for Supabase
+    
+    const chunkArray = (arr: any[], size: number) => {
+        return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+            arr.slice(i * size, i * size + size)
+        );
+    };
+
     try {
         if (toDeleteIds.length > 0) {
-            const { error } = await supabase.from(tableName).delete().in(idKey, toDeleteIds);
-            if (error) throw error;
+            const chunks = chunkArray(toDeleteIds, CHUNK_SIZE);
+            for (const chunk of chunks) {
+                const { error } = await supabase.from(tableName).delete().in(idKey, chunk);
+                if (error) {
+                    console.error(`Error deleting chunk in ${tableName}:`, error);
+                    // Don't throw immediately, try to process other operations
+                }
+            }
         }
         if (toUpsert.length > 0) {
-            const { error } = await supabase.from(tableName).upsert(toUpsert);
-            if (error) throw error;
+            const chunks = chunkArray(toUpsert, CHUNK_SIZE);
+            for (const chunk of chunks) {
+                const { error } = await supabase.from(tableName).upsert(chunk);
+                if (error) {
+                    console.error(`Error upserting chunk in ${tableName}:`, error);
+                }
+            }
         }
     } catch (error: any) {
          console.error(`Supabase sync error for ${tableName}:`, error.message || error);
-         // If a write fails, we might want to disable future syncs to prevent loop, 
-         // or just log it. For now, we log it.
     }
   };
 

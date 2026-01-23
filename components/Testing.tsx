@@ -198,8 +198,11 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 testedBy: currentUser?.username || 'user' 
             };
         } else {
+            // Safe Serial ID generation
+            const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
+            
             updated.push({
-                id: `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                id: `test-${selectedBatch.id}-${safeSerial}`,
                 receivedGoodId: selectedBatch.id,
                 serialNumber: serial,
                 category: category as 'Cell' | 'BMS',
@@ -363,8 +366,9 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                   };
               } else if (newGrade || batchLocation) {
                   // Create entry if we have grading data OR location data
+                  const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
                   updated.push({
-                      id: `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      id: `test-${selectedBatch.id}-${safeSerial}`,
                       receivedGoodId: selectedBatch.id,
                       serialNumber: serial,
                       category: category as 'Cell' | 'BMS',
@@ -521,8 +525,9 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 
         if (safeVoltage === undefined && safeResistance === undefined && safeCapacity === undefined) return;
 
+        const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
         newResults.push({
-            id: `test-import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `test-${good.id}-${safeSerial}`,
             receivedGoodId: good.id,
             serialNumber: serial,
             category: (good.category || '').toLowerCase().includes('cell') ? 'Cell' : 'BMS',

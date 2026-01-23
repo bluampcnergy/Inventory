@@ -293,8 +293,12 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             
             // Check if there is any test data to save
             if (entry.voltage || entry.resistance || entry.capacity) {
+                // Use stable ID based on goodID and Serial to prevent duplicate inserts and deletes
+                // Clean serial number for ID use (remove spaces/special chars if any)
+                const safeSerial = entry.serial.replace(/[^a-zA-Z0-9]/g, '_');
+                
                 newTestResults.push({
-                    id: `test-${goodId}-${entry.serial}-${Date.now()}`,
+                    id: `test-${goodId}-${safeSerial}`,
                     receivedGoodId: goodId,
                     serialNumber: entry.serial,
                     category: 'Cell',
