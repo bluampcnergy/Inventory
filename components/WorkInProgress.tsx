@@ -443,7 +443,13 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                           const required = comp.quantityPerUnit * quantity;
                           
                           // Find consumed serials for this component (aggregating across possible batches)
-                          const batches = receivedGoods.filter(g => g.name === itemName || g.id === comp.receivedGoodId);
+                          // FIX: Use robust name matching (trim/lowercase) to handle minor discrepancies like "100Ah LFP" vs "100Ah LFP "
+                          const batches = receivedGoods.filter(g => {
+                               const nameMatch = g.name.trim().toLowerCase() === itemName.trim().toLowerCase();
+                               const idMatch = g.id === comp.receivedGoodId;
+                               return nameMatch || idMatch;
+                          }).sort((a, b) => a.timestamp - b.timestamp);
+
                           const allSelected = batches.flatMap(b => consumedSerials[b.id] || []);
                           
                           // Group serials by Unit

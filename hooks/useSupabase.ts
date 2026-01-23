@@ -17,7 +17,8 @@ export function useSupabase<T>(
   useEffect(() => {
     const fetch = async () => {
       try {
-        const { data: dbData, error } = await supabase.from(tableName).select('*');
+        // Increased range limit to prevent data loss on large tables (default is 1000)
+        const { data: dbData, error } = await supabase.from(tableName).select('*').range(0, 50000);
         
         if (error) {
           // Check for specific Supabase errors that indicate configuration issues
