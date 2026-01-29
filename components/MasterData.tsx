@@ -115,7 +115,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         if (fg.consumedSerials) {
              for (const key in fg.consumedSerials) {
                  const serials = fg.consumedSerials[key] as string[];
-                 if (serials && serials.some(s => s.toLowerCase().includes(term))) {
+                 if (serials && Array.isArray(serials) && serials.some((s: string) => s.toLowerCase().includes(term))) {
                      isInputSerialMatch = true;
                      break;
                  }
@@ -174,7 +174,13 @@ const MasterData: React.FC<MasterDataProps> = ({
     // 3. Search WIP
     wipItems.forEach(wip => {
         const recipeName = getRecipeName(wip.recipeId).toLowerCase();
-        if (recipeName.includes(term) || (wip.consumedSerials && Object.values(wip.consumedSerials).flat().some(s => (s as string).toLowerCase().includes(term)))) {
+        
+        // Use reduce instead of flat() to ensure type safety and compatibility
+        const allSerials: string[] = wip.consumedSerials 
+            ? Object.values(wip.consumedSerials).reduce((acc: string[], val: any) => acc.concat(Array.isArray(val) ? val : []), [] as string[])
+            : [];
+
+        if (recipeName.includes(term) || (allSerials as string[]).some((s: string) => s.toLowerCase().includes(term))) {
             const rawMaterialsList: LifecycleChain['rawMaterials'] = [];
             if (wip.consumedSerials) {
                 Object.entries(wip.consumedSerials).forEach(([goodId, serials]) => {

@@ -7,6 +7,7 @@ import { TrashIcon } from './icons/TrashIcon';
 import { RefreshCw, Printer, ChevronUp, ChevronDown } from './invoices/Icons'; 
 import { SearchIcon } from './icons/SearchIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
+import { SpannerIcon } from './icons/SpannerIcon'; 
 import { generateUnitIds } from '../utils';
 
 // SearchableSelect Component
@@ -302,8 +303,41 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
   const recipeOptions = useMemo(() => recipes.map(r => ({ id: r.id, label: r.name })), [recipes]);
 
-  const filteredWipItems = wipItems.filter(item => 
-    getRecipeName(item.recipeId).toLowerCase().includes(searchTerm.toLowerCase())
+  // Combine WIP and Repair items into a unified list
+  const combinedList = useMemo(() => {
+      const productionList = wipItems.map(item => ({ ...item, type: 'production' as const }));
+      const repairList = repairItems.map(item => {
+          const originalFG = finishedGoods.find(fg => fg.id === item.finishedGoodId);
+          let consumedSerials: { [key: string]: string[] } = {};
+
+          if (originalFG) {
+              // Prioritize precise unit mapping if available
+              if (originalFG.unitComponentMap && originalFG.unitComponentMap[item.unitId]) {
+                  consumedSerials = originalFG.unitComponentMap[item.unitId];
+              } 
+              // Legacy/Fallback: If no strict map, we can't accurately know which components belong to this unit vs others in the batch.
+              // We leave consumedSerials empty or partial to avoid showing misleading data.
+              // New repairs on newly produced items will show correctly.
+          }
+
+          return { 
+              id: item.id, 
+              recipeId: item.recipeId, 
+              quantity: 1, 
+              timestamp: item.timestamp, 
+              consumedSerials: consumedSerials, 
+              type: 'repair' as const, 
+              unitId: item.unitId,
+              finishedGoodId: item.finishedGoodId
+          };
+      });
+      
+      return [...productionList, ...repairList].sort((a,b) => b.timestamp - a.timestamp);
+  }, [wipItems, repairItems, finishedGoods]);
+
+  const filteredItems = combinedList.filter(item => 
+    getRecipeName(item.recipeId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.type === 'repair' && item.unitId?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Implement Start Production
@@ -549,19 +583,63 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
       if (!confirm(`Confirm replacement of damaged unit ${damagedSerial} with ${replacementSerial}?`)) return;
 
-      setWipItems(prev => prev.map(w => {
-          if (w.id === wipItemId) {
-              const newSerials = { ...w.consumedSerials };
-              // Remove damaged from its original batch key
-              for (const bid in newSerials) {
-                  newSerials[bid] = (newSerials[bid] || []).filter(s => s !== damagedSerial);
+      // Check if it's a normal WIP item
+      const isWip = wipItems.some(w => w.id === wipItemId);
+
+      if (isWip) {
+          setWipItems(prev => prev.map(w => {
+              if (w.id === wipItemId) {
+                  const newSerials = { ...w.consumedSerials };
+                  for (const bid in newSerials) {
+                      newSerials[bid] = (newSerials[bid] || []).filter(s => s !== damagedSerial);
+                  }
+                  newSerials[replacementBatchId] = [...(newSerials[replacementBatchId] || []), replacementSerial];
+                  return { ...w, consumedSerials: newSerials };
               }
-              // Add replacement to its batch key
-              newSerials[replacementBatchId] = [...(newSerials[replacementBatchId] || []), replacementSerial];
-              return { ...w, consumedSerials: newSerials };
+              return w;
+          }));
+      } else {
+          // It's a Repair Item - Update Finished Goods Data
+          const repairItem = repairItems.find(r => r.id === wipItemId);
+          if (repairItem) {
+              setFinishedGoods(prev => prev.map(fg => {
+                  if (fg.id === repairItem.finishedGoodId) {
+                      const newFG = { ...fg };
+                      
+                      // 1. Update Aggregate Consumed Serials
+                      if (newFG.consumedSerials) {
+                          const newConsumed = { ...newFG.consumedSerials };
+                          for (const bid in newConsumed) {
+                              if (newConsumed[bid].includes(damagedSerial)) {
+                                  newConsumed[bid] = newConsumed[bid].filter(s => s !== damagedSerial);
+                              }
+                          }
+                          newConsumed[replacementBatchId] = [...(newConsumed[replacementBatchId] || []), replacementSerial];
+                          newFG.consumedSerials = newConsumed;
+                      }
+
+                      // 2. Update Unit Component Map (Precise Traceability)
+                      if (newFG.unitComponentMap && newFG.unitComponentMap[repairItem.unitId]) {
+                          const newMap = { ...newFG.unitComponentMap };
+                          const unitComponents = { ...newMap[repairItem.unitId] };
+                          
+                          for (const bid in unitComponents) {
+                              if (unitComponents[bid].includes(damagedSerial)) {
+                                  unitComponents[bid] = unitComponents[bid].filter(s => s !== damagedSerial);
+                              }
+                          }
+                          unitComponents[replacementBatchId] = [...(unitComponents[replacementBatchId] || []), replacementSerial];
+                          
+                          newMap[repairItem.unitId] = unitComponents;
+                          newFG.unitComponentMap = newMap;
+                      }
+                      
+                      return newFG;
+                  }
+                  return fg;
+              }));
           }
-          return w;
-      }));
+      }
 
       setReceivedGoods(prev => prev.map(g => {
           if (g.id === replacementBatchId) {
@@ -574,7 +652,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
           return g;
       }));
 
-      addLogEntry('WIP Replacement', `Damaged serial ${damagedSerial} replaced by ${replacementSerial} in production batch.`);
+      addLogEntry('WIP Replacement', `Damaged serial ${damagedSerial} replaced by ${replacementSerial} in ${isWip ? 'production' : 'repair'} batch.`);
       
       // Update local review state if open
       setActiveWipItem(prev => {
@@ -674,6 +752,27 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
     addLogEntry('Finished Production', `Completed ${itemToFinish.quantity} units of SKU '${getRecipeName(itemToFinish.recipeId)}'.`);
   };
 
+  const handleCompleteRepair = (repair: typeof filteredItems[0]) => {
+      if (repair.type !== 'repair' || !repair.finishedGoodId || !repair.unitId) return;
+      if (!confirm(`Mark unit ${repair.unitId} as repaired? This will return it to active Finished Goods stock.`)) return;
+
+      // Update Finished Goods: Remove from Repair, Add to Repaired
+      setFinishedGoods(prev => prev.map(fg => {
+          if (fg.id === repair.finishedGoodId) {
+              return {
+                  ...fg,
+                  inRepairUnitIds: (fg.inRepairUnitIds || []).filter(u => u !== repair.unitId),
+                  repairedUnitIds: [...(fg.repairedUnitIds || []), repair.unitId!]
+              };
+          }
+          return fg;
+      }));
+
+      // Remove from Repair Items list
+      setRepairItems(prev => prev.filter(r => r.id !== repair.id));
+      addLogEntry('Item Repaired', `Unit ${repair.unitId} repair completed.`);
+  };
+
   return (
     <div>
         <div className="flex justify-between items-center mb-6">
@@ -711,32 +810,54 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredWipItems.map(item => {
+              {filteredItems.map(item => {
                 const isExpanded = expandedWipId === item.id;
                 const recipe = recipes.find(r => r.id === item.recipeId);
+                const isRepair = item.type === 'repair';
                 
                 return (
                   <React.Fragment key={item.id}>
-                    <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''}`}>
+                    <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''} ${isRepair ? 'bg-amber-50 hover:bg-amber-100' : ''}`}>
                       <td className="p-4 text-center">
                         <button onClick={() => setExpandedWipId(isExpanded ? null : item.id)} className="text-gray-400 hover:text-[#658C3E]">
                           {isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                         </button>
                       </td>
-                      <td className="p-4 font-bold">{getRecipeName(item.recipeId)}</td>
-                      <td className="p-4"><span className="bg-[#A8BF75]/20 px-3 py-1 rounded-full text-[#658C3E] text-xs font-bold">{item.quantity}</span></td>
+                      <td className="p-4 font-bold">
+                          {getRecipeName(item.recipeId)}
+                          {isRepair && <span className="ml-2 text-[10px] text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1 inline-flex"><SpannerIcon size={10} /> Repair</span>}
+                      </td>
+                      <td className="p-4">
+                          {isRepair ? (
+                              <span className="bg-amber-200 px-3 py-1 rounded-full text-amber-800 text-xs font-bold">IN REPAIR</span>
+                          ) : (
+                              <span className="bg-[#A8BF75]/20 px-3 py-1 rounded-full text-[#658C3E] text-xs font-bold">{item.quantity}</span>
+                          )}
+                      </td>
                       <td className="p-4 text-xs text-gray-600">
-                          {recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>• {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)}
+                          {isRepair ? (
+                              <span className="font-mono text-slate-500 font-bold">Repairing Unit: {item.unitId}</span>
+                          ) : (
+                              recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>• {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)
+                          )}
                       </td>
                       <td className="p-4 text-sm text-gray-500">{new Date(item.timestamp).toLocaleDateString()}</td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end space-x-3">
-                           <button onClick={() => { setActiveWipItem(item); setIsManageSerialsModalOpen(true); }} className="text-[#658C3E] hover:text-[#8EBF45] text-xs font-semibold flex items-center">
+                           {/* Always show Swap Serials */}
+                           <button onClick={() => { setActiveWipItem(item as WIPItem); setIsManageSerialsModalOpen(true); }} className="text-[#658C3E] hover:text-[#8EBF45] text-xs font-semibold flex items-center">
                             <RefreshCw size={14} className="mr-1"/> Swap Serials
                           </button>
-                          <button onClick={() => openFinishModal(item)} className="bg-[#8EBF45] text-[#0D0D0D] px-3 py-1.5 rounded-lg shadow-sm hover:bg-[#658C3E] hover:text-white transition-colors text-xs font-bold uppercase tracking-wide">
-                            Finish Batch
-                          </button>
+                           
+                           {isRepair ? (
+                               <button onClick={() => handleCompleteRepair(item)} className="bg-amber-500 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-amber-600 transition-colors text-xs font-bold uppercase tracking-wide flex items-center ml-auto">
+                                   <ArrowRightIcon className="mr-1" size={14}/> Complete Repair
+                               </button>
+                           ) : (
+                              <button onClick={() => openFinishModal(item as WIPItem)} className="bg-[#8EBF45] text-[#0D0D0D] px-3 py-1.5 rounded-lg shadow-sm hover:bg-[#658C3E] hover:text-white transition-colors text-xs font-bold uppercase tracking-wide">
+                                Finish Batch
+                              </button>
+                           )}
                         </div>
                       </td>
                     </tr>
@@ -769,7 +890,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                                      <p className="text-[10px] font-bold text-gray-400 uppercase">{itemName}</p>
                                                   </div>
                                                   <div className="flex flex-wrap gap-1 mt-0.5">
-                                                      {unitSerials.map(sn => <span key={sn} className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border text-slate-700">{sn}</span>)}
+                                                      {unitSerials.length > 0 ? unitSerials.map(sn => <span key={sn} className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border text-slate-700">{sn}</span>) : <span className="text-[10px] text-gray-300 italic">No specific serials recorded</span>}
                                                   </div>
                                               </div>
                                             );
@@ -785,8 +906,8 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                   </React.Fragment>
                 );
               })}
-              {filteredWipItems.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">No active production batches found.</td></tr>
+              {filteredItems.length === 0 && (
+                <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">No active production or repair batches found.</td></tr>
               )}
             </tbody>
         </table>
