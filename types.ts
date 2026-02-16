@@ -52,10 +52,10 @@ export interface ReceivedGood {
   timestamp: number;
   testReportLink?: string;
   gradingConfig?: {
-      lowerLimit: number;
-      upperLimit: number;
-      numGrades: number;
-      mode: 'capacity' | 'resistance' | 'voltage';
+    lowerLimit: number;
+    upperLimit: number;
+    numGrades: number;
+    mode: 'capacity' | 'resistance' | 'voltage';
   };
 }
 
@@ -95,12 +95,12 @@ export interface WIPItem {
 }
 
 export interface UnitMetadata {
-    chemistry?: 'LFP' | 'NMC';
-    balancing?: string;
-    voltage?: number;
-    capacity?: number;
-    resistance?: number;
-    weight?: number;
+  chemistry?: 'LFP' | 'NMC';
+  balancing?: string;
+  voltage?: number;
+  capacity?: number;
+  resistance?: number;
+  weight?: number;
 }
 
 export interface FinishedGood {
@@ -141,144 +141,145 @@ export interface CompanyProfile {
 // --- Storage Management Types ---
 
 export interface StorageRoom {
-    id: string;
-    name: string;
+  id: string;
+  name: string;
 }
 
 export interface StorageUnit {
-    id: string;
-    roomId: string;
-    name: string;
-    type: 'rack' | 'cupboard' | 'drawer';
-    sectionCount: number;
+  id: string;
+  roomId: string;
+  name: string;
+  type: 'rack' | 'cupboard' | 'drawer';
+  sectionCount: number;
 }
 
 export interface StorageItem {
-    id: string;
-    unitId: string;
-    sectionIndex: number;
-    name: string;
-    description?: string;
-    quantity: number;
-    linkedInventoryId?: string;
-    timestamp: number;
+  id: string;
+  unitId: string;
+  sectionIndex: number;
+  name: string;
+  description?: string;
+  quantity: number;
+  linkedInventoryId?: string;
+  timestamp: number;
 }
 
 // --- Finance & Invoice Types ---
 
 export interface BankDetails {
-    account_name?: string;
-    account_number?: string;
-    bank_name?: string;
-    branch?: string;
-    ifsc?: string;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  branch?: string;
+  ifsc?: string;
 }
 
 export interface InvoiceParty {
-    name?: string;
-    gstin?: string;
-    address?: string;
-    state?: string;
-    state_code?: string;
-    email?: string;
-    phone?: string;
-    contact_person?: string;
-    pan?: string;
-    bank_details?: BankDetails;
+  name?: string;
+  gstin?: string;
+  address?: string;
+  state?: string;
+  state_code?: string;
+  email?: string;
+  phone?: string;
+  contact_person?: string;
+  pan?: string;
+  bank_details?: BankDetails;
 }
 
 export interface InvoiceItem {
-    description: string;
-    item_type?: string;
-    make_model?: string;
-    status?: string;
-    hsn_sac?: string;
-    quantity: number;
-    unit_price: number;
-    taxable_value: number;
-    cgst_rate?: number;
-    cgst_amount?: number;
-    sgst_rate?: number;
-    sgst_amount?: number;
-    igst_rate?: number;
-    igst_amount?: number;
-    total_value: number;
+  description: string;
+  item_type?: string;
+  make_model?: string;
+  status?: string;
+  hsn_sac?: string;
+  quantity: number;
+  unit_price: number;
+  discount?: number;
+  taxable_value: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  total_value: number;
 }
 
 export interface ExtractedInvoice {
-    id?: string;
-    created_at?: string;
-    timestamp?: string;
-    filename: string;
-    document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'other';
-    source_type: 'sales' | 'purchase';
-    issuer_details: InvoiceParty;
-    receiver_details: InvoiceParty;
-    invoice_metadata: {
-        invoice_number: string;
-        invoice_date: string;
-        due_date?: string;
-        purchase_order_number?: string;
-        ewaybill_number?: string;
-        input_tax_credit?: 'set_off' | 'non_set_off' | 'not_applicable';
-        related_invoice_number?: string;
-        note_reason?: string;
-        employee_name?: string;
-        expense_category?: string;
-    };
-    items: InvoiceItem[];
-    totals: {
-        subtotal_taxable: number;
-        cgst_total: number;
-        sgst_total: number;
-        igst_total: number;
-        round_off?: number;
-        grand_total: number;
-        currency?: string;
-    };
-    ocr_confidence_score?: number;
-    raw_text?: string;
-    requires_review: boolean;
-    uploaded_by?: string;
+  id?: string;
+  created_at?: string;
+  timestamp?: string;
+  filename: string;
+  document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'other';
+  source_type: 'sales' | 'purchase';
+  issuer_details: InvoiceParty;
+  receiver_details: InvoiceParty;
+  invoice_metadata: {
+    invoice_number: string;
+    invoice_date: string;
+    due_date?: string;
+    purchase_order_number?: string;
+    ewaybill_number?: string;
+    input_tax_credit?: 'set_off' | 'non_set_off' | 'not_applicable';
+    related_invoice_number?: string;
+    note_reason?: string;
+    employee_name?: string;
+    expense_category?: string;
+  };
+  items: InvoiceItem[];
+  totals: {
+    subtotal_taxable: number;
+    cgst_total: number;
+    sgst_total: number;
+    igst_total: number;
+    round_off?: number;
+    grand_total: number;
+    currency?: string;
+  };
+  ocr_confidence_score?: number;
+  raw_text?: string;
+  requires_review: boolean;
+  uploaded_by?: string;
 }
 
 export interface InvoiceTemplate {
-    id?: string;
-    name: string;
-    type: 'invoice' | 'po';
-    config: {
-        font: 'font-sans' | 'font-serif' | 'font-mono';
-        color: string;
-        headerText: string;
-        footerText: string;
-        terms: string;
-        logoUrl?: string;
-        stampUrl?: string;
-        logoSize?: number;
-        signatureUrl?: string;
-        issuer_details?: InvoiceParty;
-    }
+  id?: string;
+  name: string;
+  type: 'invoice' | 'po';
+  config: {
+    font: 'font-sans' | 'font-serif' | 'font-mono';
+    color: string;
+    headerText: string;
+    footerText: string;
+    terms: string;
+    logoUrl?: string;
+    stampUrl?: string;
+    logoSize?: number;
+    signatureUrl?: string;
+    issuer_details?: InvoiceParty;
+  }
 }
 
 export interface GST3BSummary {
-    outward_taxable: number;
-    outward_igst: number;
-    outward_cgst: number;
-    outward_sgst: number;
-    itc_igst: number;
-    itc_cgst: number;
-    itc_sgst: number;
-    itc_ineligible: number;
+  outward_taxable: number;
+  outward_igst: number;
+  outward_cgst: number;
+  outward_sgst: number;
+  itc_igst: number;
+  itc_cgst: number;
+  itc_sgst: number;
+  itc_ineligible: number;
 }
 
 export const EMPTY_INVOICE: ExtractedInvoice = {
-    filename: '',
-    document_type: 'invoice',
-    source_type: 'purchase',
-    issuer_details: {},
-    receiver_details: {},
-    invoice_metadata: { invoice_number: '', invoice_date: '' },
-    items: [],
-    totals: { subtotal_taxable: 0, cgst_total: 0, sgst_total: 0, igst_total: 0, grand_total: 0 },
-    requires_review: true
+  filename: '',
+  document_type: 'invoice',
+  source_type: 'purchase',
+  issuer_details: {},
+  receiver_details: {},
+  invoice_metadata: { invoice_number: '', invoice_date: '' },
+  items: [],
+  totals: { subtotal_taxable: 0, cgst_total: 0, sgst_total: 0, igst_total: 0, grand_total: 0 },
+  requires_review: true
 };
