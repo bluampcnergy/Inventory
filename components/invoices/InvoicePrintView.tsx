@@ -54,7 +54,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
     const docType = doc.document_type || 'invoice';
     const customTitle = docType === 'generated_po' ? 'PURCHASE ORDER' : docType === 'quotation' ? 'QUOTATION' : 'INVOICE';
     const amountInWordsStr = amountToWords(doc.totals?.grand_total || 0);
-    const taxMode = getTaxMode(doc.issuer_details?.gstin, doc.receiver_details?.gstin);
+    const taxMode = getTaxMode(doc.issuer_details?.gstin, doc.receiver_details?.gstin, doc.invoice_metadata?.tax_mode);
 
     const formatPrintDate = (dateStr: string) => {
         if (!dateStr) return '';

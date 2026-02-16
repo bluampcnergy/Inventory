@@ -227,6 +227,7 @@ export interface ExtractedInvoice {
     note_reason?: string;
     employee_name?: string;
     expense_category?: string;
+    tax_mode?: 'intra' | 'inter';
   };
   items: InvoiceItem[];
   totals: {

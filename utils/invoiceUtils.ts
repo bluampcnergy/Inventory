@@ -14,7 +14,8 @@ export const getStateCodeFromGSTIN = (gstin: string | undefined): string | null 
   return gstin.substring(0, 2);
 };
 
-export const getTaxMode = (issuerGSTIN: string | undefined, receiverGSTIN: string | undefined): 'intra' | 'inter' => {
+export const getTaxMode = (issuerGSTIN: string | undefined, receiverGSTIN: string | undefined, override?: 'intra' | 'inter'): 'intra' | 'inter' => {
+  if (override) return override;
   const issuerState = getStateCodeFromGSTIN(issuerGSTIN);
   const receiverState = getStateCodeFromGSTIN(receiverGSTIN);
   if (issuerState && receiverState && issuerState === receiverState) return 'intra';

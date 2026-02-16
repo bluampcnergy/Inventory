@@ -184,9 +184,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
             item.taxable_value = Math.max(0, (Number(item.quantity) * Number(item.unit_price)) - Number(item.discount || 0));
         }
 
-        // Tax calculation based on Place of Supply (GSTIN state codes)
+        // Tax calculation based on Place of Supply (GSTIN state codes) or manual override
         const taxRate = Number(item.igst_rate || 0);
-        const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin);
+        const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
 
         if (taxMode === 'intra') {
             const halfRate = taxRate / 2;
@@ -274,6 +274,44 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         };
         reader.readAsText(file);
         e.target.value = '';
+    };
+
+    const handleTaxModeChange = (mode: 'intra' | 'inter' | undefined) => {
+        // Recalculate all items with new tax mode
+        const newItems = doc.items.map(item => {
+            const taxRate = Number(item.igst_rate || 0);
+            // Use new mode for calculation
+            const effectiveTaxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, mode);
+
+            const newItem = { ...item };
+            if (effectiveTaxMode === 'intra') {
+                const halfRate = taxRate / 2;
+                newItem.cgst_rate = halfRate;
+                newItem.cgst_amount = (newItem.taxable_value || 0) * (halfRate / 100);
+                newItem.sgst_rate = halfRate;
+                newItem.sgst_amount = (newItem.taxable_value || 0) * (halfRate / 100);
+                newItem.igst_amount = 0;
+                newItem.igst_rate = taxRate; // Keep original rate stored
+            } else {
+                newItem.igst_amount = (newItem.taxable_value || 0) * (taxRate / 100);
+                newItem.igst_rate = taxRate;
+                newItem.cgst_rate = 0;
+                newItem.cgst_amount = 0;
+                newItem.sgst_rate = 0;
+                newItem.sgst_amount = 0;
+            }
+            newItem.total_value = (newItem.taxable_value || 0) + (newItem.cgst_amount || 0) + (newItem.sgst_amount || 0) + (newItem.igst_amount || 0);
+            return newItem;
+        });
+
+        const newTotals = recalculateInvoiceTotals(newItems);
+
+        setDoc(prev => ({
+            ...prev,
+            invoice_metadata: { ...prev.invoice_metadata, tax_mode: mode },
+            items: newItems,
+            totals: newTotals
+        }));
     };
 
     const addItem = () => {
@@ -619,6 +657,33 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                             <input className="w-full text-sm p-2 border rounded" placeholder="Phone" value={doc.shipped_to_details?.phone || ''} onChange={e => updateShippedTo('phone', e.target.value)} />
                         </div>
                     </div>
+
+                    {/* Tax Mode Selection */}
+                    <div className="bg-slate-50 p-3 rounded border">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-bold text-slate-700">Tax Mode</h3>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                                {doc.invoice_metadata.tax_mode ? 'Manual' : 'Auto'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => handleTaxModeChange(doc.invoice_metadata.tax_mode === 'intra' ? undefined : 'intra')}
+                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'intra' ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'intra' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                            >
+                                CGST + SGST (Intra)
+                            </button>
+                            <button
+                                onClick={() => handleTaxModeChange(doc.invoice_metadata.tax_mode === 'inter' ? undefined : 'inter')}
+                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'inter' ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'inter' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                            >
+                                IGST (Inter)
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2 leading-tight">
+                            Select manually to override GSTIN-based detection. Click selected again to revert to Auto.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="mt-8 pt-6 border-t flex flex-col gap-3 mb-10">
@@ -760,7 +825,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
                         {/* Dedicated Tax Breakdown Table */}
                         {doc.items.length > 0 && (() => {
-                            const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin);
+                            const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
                             // Aggregate items by GST rate for tax summary
                             const taxGroups: { [rate: string]: { hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
                             doc.items.forEach(item => {
@@ -899,7 +964,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                     {/* === PRINT-ONLY PAGINATED VIEW === */}
                     <div className="print-only" style={{ display: 'none' }}>
                         {paginatedPages.map((pageItems, pageIdx) => {
-                            const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin);
+                            const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
                             const taxGroups: { [k: string]: { hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
                             doc.items.forEach(item => {
                                 const rate = Number(item.igst_rate || 0);
