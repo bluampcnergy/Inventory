@@ -823,33 +823,20 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                             </table>
                         </div>
 
-                        {/* Dedicated Tax Breakdown Table */}
+                        {/* Item-wise Tax Breakdown Table (Editable HSN & Rate) */}
                         {doc.items.length > 0 && (() => {
                             const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
-                            // Aggregate items by GST rate for tax summary
-                            const taxGroups: { [rate: string]: { hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
-                            doc.items.forEach(item => {
-                                const rate = Number(item.igst_rate || 0);
-                                const key = `${rate}-${item.hsn_sac || ''}`;
-                                if (!taxGroups[key]) {
-                                    taxGroups[key] = { hsn: item.hsn_sac || '-', taxableValue: 0, rate, cgst: 0, sgst: 0, igst: 0, totalTax: 0 };
-                                }
-                                taxGroups[key].taxableValue += item.taxable_value || 0;
-                                taxGroups[key].cgst += item.cgst_amount || 0;
-                                taxGroups[key].sgst += item.sgst_amount || 0;
-                                taxGroups[key].igst += item.igst_amount || 0;
-                                taxGroups[key].totalTax += (item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0);
-                            });
-                            const groups = Object.values(taxGroups);
                             return (
                                 <div className="mb-4">
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tax Breakdown {taxMode === 'intra' ? '(Intra-State: CGST + SGST)' : '(Inter-State: IGST)'}</p>
                                     <table className="w-full text-sm border-collapse border border-slate-200">
                                         <thead>
                                             <tr className="bg-slate-50 border-b border-slate-200">
-                                                <th className="py-1.5 px-2 text-left text-slate-500 font-semibold">HSN/SAC</th>
-                                                <th className="py-1.5 px-2 text-right text-slate-500 font-semibold">Taxable Value</th>
-                                                <th className="py-1.5 px-2 text-center text-slate-500 font-semibold">Rate %</th>
+                                                <th className="py-1.5 px-2 text-left text-slate-500 font-semibold w-8">#</th>
+                                                <th className="py-1.5 px-2 text-left text-slate-500 font-semibold">Item</th>
+                                                <th className="py-1.5 px-2 text-left text-slate-500 font-semibold w-28">HSN/SAC</th>
+                                                <th className="py-1.5 px-2 text-right text-slate-500 font-semibold">Taxable</th>
+                                                <th className="py-1.5 px-2 text-center text-slate-500 font-semibold w-20">Rate %</th>
                                                 {taxMode === 'intra' ? (
                                                     <>
                                                         <th className="py-1.5 px-2 text-right text-slate-500 font-semibold">CGST</th>
@@ -858,30 +845,49 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                                 ) : (
                                                     <th className="py-1.5 px-2 text-right text-slate-500 font-semibold">IGST</th>
                                                 )}
-                                                <th className="py-1.5 px-2 text-right text-slate-500 font-bold">Total Tax</th>
+                                                <th className="py-1.5 px-2 text-right text-slate-500 font-bold">Tax</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {groups.map((g, i) => (
-                                                <tr key={i}>
-                                                    <td className="py-1.5 px-2 text-slate-600">{g.hsn}</td>
-                                                    <td className="py-1.5 px-2 text-right">{g.taxableValue.toFixed(2)}</td>
-                                                    <td className="py-1.5 px-2 text-center font-medium">{g.rate}%</td>
+                                            {doc.items.map((item, idx) => (
+                                                <tr key={idx} className="group">
+                                                    <td className="py-1.5 px-2 text-slate-400">{idx + 1}</td>
+                                                    <td className="py-1.5 px-2 text-slate-600 text-xs truncate max-w-[120px]" title={safeRender(item.description)}>{safeRender(item.description)}</td>
+                                                    <td className="py-1.5 px-1">
+                                                        <input
+                                                            className="w-full bg-transparent outline-none text-sm border-b border-transparent hover:border-slate-300 focus:border-[#8EBF45] text-slate-700 px-1"
+                                                            value={item.hsn_sac || ''}
+                                                            onChange={e => updateItem(idx, 'hsn_sac', e.target.value)}
+                                                            placeholder="—"
+                                                        />
+                                                    </td>
+                                                    <td className="py-1.5 px-2 text-right text-slate-600">{(item.taxable_value || 0).toFixed(2)}</td>
+                                                    <td className="py-1.5 px-1 text-center">
+                                                        <input
+                                                            className="w-full bg-transparent outline-none text-sm text-center border-b border-transparent hover:border-slate-300 focus:border-[#8EBF45] font-medium px-1"
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.5"
+                                                            value={item.igst_rate || 0}
+                                                            onChange={e => updateItem(idx, 'igst_rate', e.target.value)}
+                                                        />
+                                                    </td>
                                                     {taxMode === 'intra' ? (
                                                         <>
-                                                            <td className="py-1.5 px-2 text-right">{g.cgst.toFixed(2)}</td>
-                                                            <td className="py-1.5 px-2 text-right">{g.sgst.toFixed(2)}</td>
+                                                            <td className="py-1.5 px-2 text-right text-slate-600">{(item.cgst_amount || 0).toFixed(2)}</td>
+                                                            <td className="py-1.5 px-2 text-right text-slate-600">{(item.sgst_amount || 0).toFixed(2)}</td>
                                                         </>
                                                     ) : (
-                                                        <td className="py-1.5 px-2 text-right">{g.igst.toFixed(2)}</td>
+                                                        <td className="py-1.5 px-2 text-right text-slate-600">{(item.igst_amount || 0).toFixed(2)}</td>
                                                     )}
-                                                    <td className="py-1.5 px-2 text-right font-semibold">{g.totalTax.toFixed(2)}</td>
+                                                    <td className="py-1.5 px-2 text-right font-semibold">{((item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0)).toFixed(2)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                         <tfoot>
                                             <tr className="border-t-2 border-slate-300 font-bold">
-                                                <td className="py-1.5 px-2" colSpan={2}>Total</td>
+                                                <td className="py-1.5 px-2" colSpan={3}>Total</td>
+                                                <td className="py-1.5 px-2 text-right">{(doc.totals.subtotal_taxable || 0).toFixed(2)}</td>
                                                 <td className="py-1.5 px-2"></td>
                                                 {taxMode === 'intra' ? (
                                                     <>
@@ -965,18 +971,6 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                     <div className="print-only" style={{ display: 'none' }}>
                         {paginatedPages.map((pageItems, pageIdx) => {
                             const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
-                            const taxGroups: { [k: string]: { hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
-                            doc.items.forEach(item => {
-                                const rate = Number(item.igst_rate || 0);
-                                const key = `${rate}-${item.hsn_sac || ''}`;
-                                if (!taxGroups[key]) taxGroups[key] = { hsn: item.hsn_sac || '-', taxableValue: 0, rate, cgst: 0, sgst: 0, igst: 0, totalTax: 0 };
-                                taxGroups[key].taxableValue += item.taxable_value || 0;
-                                taxGroups[key].cgst += item.cgst_amount || 0;
-                                taxGroups[key].sgst += item.sgst_amount || 0;
-                                taxGroups[key].igst += item.igst_amount || 0;
-                                taxGroups[key].totalTax += (item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0);
-                            });
-                            const groups = Object.values(taxGroups);
                             return (
                                 <div className="invoice-page" key={pageIdx}>
                                     {/* ---- PAGE HEADER ---- */}
@@ -1061,13 +1055,15 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                         </table>
                                     </div>
 
-                                    {/* ---- TAX BREAKDOWN ---- */}
-                                    {groups.length > 0 && (
+                                    {/* ---- TAX BREAKDOWN (Item-wise) ---- */}
+                                    {doc.items.length > 0 && (
                                         <div className="mb-3">
                                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tax Breakdown {taxMode === 'intra' ? '(CGST + SGST)' : '(IGST)'}</p>
                                             <table className="w-full text-xs border-collapse border border-slate-200">
                                                 <thead>
                                                     <tr className="bg-slate-50 border-b border-slate-200">
+                                                        <th className="py-1 px-2 text-left text-slate-500 font-semibold w-6">#</th>
+                                                        <th className="py-1 px-2 text-left text-slate-500 font-semibold">Item</th>
                                                         <th className="py-1 px-2 text-left text-slate-500 font-semibold">HSN/SAC</th>
                                                         <th className="py-1 px-2 text-right text-slate-500 font-semibold">Taxable</th>
                                                         <th className="py-1 px-2 text-center text-slate-500 font-semibold">Rate%</th>
@@ -1076,19 +1072,22 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
-                                                    {groups.map((g, i) => (
-                                                        <tr key={i}>
-                                                            <td className="py-1 px-2 text-slate-600">{g.hsn}</td>
-                                                            <td className="py-1 px-2 text-right">{g.taxableValue.toFixed(2)}</td>
-                                                            <td className="py-1 px-2 text-center">{g.rate}%</td>
-                                                            {taxMode === 'intra' ? (<><td className="py-1 px-2 text-right">{g.cgst.toFixed(2)}</td><td className="py-1 px-2 text-right">{g.sgst.toFixed(2)}</td></>) : (<td className="py-1 px-2 text-right">{g.igst.toFixed(2)}</td>)}
-                                                            <td className="py-1 px-2 text-right font-semibold">{g.totalTax.toFixed(2)}</td>
+                                                    {doc.items.map((item, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="py-1 px-2 text-slate-400">{idx + 1}</td>
+                                                            <td className="py-1 px-2 text-slate-600 truncate max-w-[100px]">{safeRender(item.description)}</td>
+                                                            <td className="py-1 px-2 text-slate-600">{item.hsn_sac || '—'}</td>
+                                                            <td className="py-1 px-2 text-right">{(item.taxable_value || 0).toFixed(2)}</td>
+                                                            <td className="py-1 px-2 text-center">{item.igst_rate || 0}%</td>
+                                                            {taxMode === 'intra' ? (<><td className="py-1 px-2 text-right">{(item.cgst_amount || 0).toFixed(2)}</td><td className="py-1 px-2 text-right">{(item.sgst_amount || 0).toFixed(2)}</td></>) : (<td className="py-1 px-2 text-right">{(item.igst_amount || 0).toFixed(2)}</td>)}
+                                                            <td className="py-1 px-2 text-right font-semibold">{((item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0)).toFixed(2)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                                 <tfoot>
                                                     <tr className="border-t border-slate-300 font-bold text-xs">
-                                                        <td className="py-1 px-2" colSpan={2}>Total</td>
+                                                        <td className="py-1 px-2" colSpan={3}>Total</td>
+                                                        <td className="py-1 px-2 text-right">{(doc.totals.subtotal_taxable || 0).toFixed(2)}</td>
                                                         <td className="py-1 px-2"></td>
                                                         {taxMode === 'intra' ? (<><td className="py-1 px-2 text-right">{(doc.totals.cgst_total || 0).toFixed(2)}</td><td className="py-1 px-2 text-right">{(doc.totals.sgst_total || 0).toFixed(2)}</td></>) : (<td className="py-1 px-2 text-right">{(doc.totals.igst_total || 0).toFixed(2)}</td>)}
                                                         <td className="py-1 px-2 text-right" style={{ color: config.color }}>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</td>
