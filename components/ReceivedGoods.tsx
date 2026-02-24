@@ -68,6 +68,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
     const [serialEntries, setSerialEntries] = useState<SerialGridRow[]>([]);
     const [prefix, setPrefix] = useState('');
     const [startNumber, setStartNumber] = useState(1);
+    const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
     // Helper to determine if category requires serial tracking
     const isTrackedCategory = (cat: string) => (cat || '').toLowerCase() === 'cell';
@@ -551,13 +552,51 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     const progress = isTracked && good.serials.length > 0 ? Math.min(100, Math.round((good.serials.length / good.quantity) * 100)) : 0;
 
                     return (
-                        <div key={good.id} className="bg-white rounded-2xl shadow-sm hover:shadow-xl p-6 flex flex-col border border-slate-200 transition-all duration-300">
+                        <div key={good.id} className="relative bg-white rounded-2xl shadow-sm hover:shadow-xl p-6 flex flex-col border border-slate-200 transition-all duration-300">
                             <div className="flex justify-between items-start mb-4">
                                 <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${statusInfo[good.status].color}`}>
                                     {statusInfo[good.status].text}
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-300">{new Date(good.timestamp).toLocaleDateString()}</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === good.id ? null : good.id); }}
+                                        className={`relative p-1 rounded-md transition-all text-sm ${(good.notes && good.notes !== 'actual physical qty = ')
+                                                ? 'text-amber-500 hover:bg-amber-50'
+                                                : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'
+                                            }`}
+                                        title="Open note"
+                                    >
+                                        📝
+                                        {good.notes && good.notes !== 'actual physical qty = ' && (
+                                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full"></span>
+                                        )}
+                                    </button>
+                                    <span className="text-[10px] font-bold text-slate-300">{new Date(good.timestamp).toLocaleDateString()}</span>
+                                </div>
                             </div>
+
+                            {/* Sticky Note Popup */}
+                            {openNoteId === good.id && (
+                                <div className="absolute top-12 right-4 z-50 w-64 animate-in" style={{ animation: 'fadeIn 0.15s ease-out' }}>
+                                    <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
+                                            <button onClick={() => setOpenNoteId(null)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
+                                        </div>
+                                        <textarea
+                                            className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
+                                            rows={3}
+                                            placeholder="actual physical qty = "
+                                            value={good.notes ?? 'actual physical qty = '}
+                                            onChange={(e) => {
+                                                setReceivedGoods(prev => prev.map(g => g.id === good.id ? { ...g, notes: e.target.value } : g));
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex-1">
                                 <h3 className="font-bold text-xl text-[#0D0D0D] leading-tight mb-1">{good.name}</h3>

@@ -60,6 +60,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
     const [showGrading, setShowGrading] = useState(false);
     const [gradeFilter, setGradeFilter] = useState<string>('all');
     const [batchLocation, setBatchLocation] = useState<string>('');
+    const [showBatchNote, setShowBatchNote] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -746,20 +747,43 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                     onChange={(e) => setBatchLocation(e.target.value)}
                                 />
                             </div>
-                            <div className="flex flex-col">
-                                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1">Notes</label>
-                                <input
-                                    type="text"
-                                    placeholder="actual physical qty = "
-                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[#8EBF45] outline-none w-48 text-sm"
-                                    value={selectedBatch.notes ?? 'actual physical qty = '}
-                                    onChange={(e) => {
-                                        if (!setReceivedGoods) return;
-                                        const updated = { ...selectedBatch, notes: e.target.value };
-                                        setSelectedBatch(updated);
-                                        setReceivedGoods(prev => prev.map(g => g.id === selectedBatch.id ? updated : g));
-                                    }}
-                                />
+                            <div className="flex flex-col relative">
+                                <button
+                                    onClick={() => setShowBatchNote(!showBatchNote)}
+                                    className={`p-2 rounded-md transition-all text-lg ${(selectedBatch.notes && selectedBatch.notes !== 'actual physical qty = ')
+                                            ? 'text-amber-500 hover:bg-amber-50'
+                                            : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'
+                                        }`}
+                                    title="Open note"
+                                >
+                                    📝
+                                    {selectedBatch.notes && selectedBatch.notes !== 'actual physical qty = ' && (
+                                        <span className="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>
+                                    )}
+                                </button>
+                                {showBatchNote && (
+                                    <div className="absolute top-10 right-0 z-50 w-64" style={{ animation: 'fadeIn 0.15s ease-out' }}>
+                                        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
+                                                <button onClick={() => setShowBatchNote(false)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
+                                            </div>
+                                            <textarea
+                                                className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
+                                                rows={3}
+                                                placeholder="actual physical qty = "
+                                                value={selectedBatch.notes ?? 'actual physical qty = '}
+                                                onChange={(e) => {
+                                                    if (!setReceivedGoods) return;
+                                                    const updated = { ...selectedBatch, notes: e.target.value };
+                                                    setSelectedBatch(updated);
+                                                    setReceivedGoods(prev => prev.map(g => g.id === selectedBatch.id ? updated : g));
+                                                }}
+                                                autoFocus
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col">
                                 <label className="text-[10px] text-gray-500 font-bold uppercase mb-1">Search SN</label>
