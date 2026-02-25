@@ -25,11 +25,10 @@ interface NavButtonProps {
 const TopNavButton: React.FC<NavButtonProps> = ({ isActive, onClick, children, icon }) => (
   <button
     onClick={onClick}
-    className={`flex items-center px-4 py-3 text-sm font-semibold transition-all duration-200 border-b-4 focus:outline-none ${
-      isActive
+    className={`flex items-center px-4 py-3 text-sm font-semibold transition-all duration-200 border-b-4 focus:outline-none ${isActive
         ? 'border-[#8EBF45] text-[#8EBF45] bg-white/5'
         : 'border-transparent text-slate-400 hover:text-white hover:border-white/20'
-    }`}
+      }`}
   >
     {icon && <span className={`mr-2 transition-colors duration-200 ${isActive ? 'text-[#8EBF45]' : 'text-slate-500'}`}>{icon}</span>}
     {children}
@@ -39,19 +38,33 @@ const TopNavButton: React.FC<NavButtonProps> = ({ isActive, onClick, children, i
 const SubNavButton: React.FC<NavButtonProps> = ({ isActive, onClick, children, icon }) => (
   <button
     onClick={onClick}
-    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 whitespace-nowrap border focus:outline-none flex items-center gap-2 ${
-      isActive
+    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 whitespace-nowrap border focus:outline-none flex items-center gap-2 ${isActive
         ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45] shadow-lg scale-105'
         : 'bg-white text-[#404040] border-[#A8BF75]/30 hover:border-[#8EBF45] hover:text-[#658C3E]'
-    }`}
+      }`}
   >
     {icon}
     {children}
   </button>
 );
 
+const ExternalNavButton: React.FC<{ href: string; children: React.ReactNode; icon?: React.ReactNode }> = ({ href, children, icon }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center px-4 py-3 text-sm font-semibold transition-all duration-200 border-b-4 border-transparent text-slate-400 hover:text-white hover:border-white/20 focus:outline-none"
+  >
+    {icon && <span className="mr-2 text-slate-500 transition-colors duration-200 group-hover:text-white">{icon}</span>}
+    {children}
+    <svg className="w-3 h-3 ml-1.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+  </a>
+);
+
 const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRole, onLogout }) => {
-  
+
   const categories = useMemo(() => ({
     operations: ['received', 'testing', 'wip', 'finished', 'storage'] as View[],
     finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_maker'] as View[],
@@ -73,29 +86,34 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
         <div className="flex flex-col md:flex-row md:items-center justify-between h-auto md:h-16">
           <div className="flex items-center justify-between py-3 md:py-0 mr-8">
             <div className="flex items-center cursor-pointer gap-3" onClick={() => setView('finance_dashboard')}>
-                <img 
-                  src="https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Full_battery_black_bg.png" 
-                  alt="Datlion Cnergy Logo" 
-                  className="h-10 w-auto object-contain"
-                />
-                <div className="flex flex-col justify-center">
-                    <h1 className="text-lg font-bold text-white leading-none tracking-tight font-brand">Datlion Cnergy</h1>
-                    <p className="text-[10px] text-[#8EBF45] font-black tracking-widest uppercase mt-0.5">Plant Management OS</p>
-                </div>
+              <img
+                src="https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Full_battery_black_bg.png"
+                alt="Datlion Cnergy Logo"
+                className="h-10 w-auto object-contain"
+              />
+              <div className="flex flex-col justify-center">
+                <h1 className="text-lg font-bold text-white leading-none tracking-tight font-brand">Datlion Cnergy</h1>
+                <p className="text-[10px] text-[#8EBF45] font-black tracking-widest uppercase mt-0.5">Plant Management OS</p>
+              </div>
             </div>
           </div>
 
           <nav className="flex space-x-1 overflow-x-auto scrollbar-hide md:flex-grow md:justify-center pt-1 md:pt-0">
-             <TopNavButton isActive={currentCategory === 'operations'} onClick={() => setView('received')} icon={<CubeIcon className="h-4 w-4" />}>Operations</TopNavButton>
-             <TopNavButton isActive={currentCategory === 'finance'} onClick={() => setView('finance_dashboard')} icon={<FileTextIcon className="h-4 w-4" />}>Finance</TopNavButton>
-             <TopNavButton isActive={currentCategory === 'analytics'} onClick={() => setView('reports')} icon={<SearchIcon className="h-4 w-4" />}>Analytics</TopNavButton>
-             <TopNavButton isActive={currentCategory === 'admin'} onClick={() => setView('companies')} icon={<BuildingIcon className="h-4 w-4" />}>Admin</TopNavButton>
+            <TopNavButton isActive={currentCategory === 'operations'} onClick={() => setView('received')} icon={<CubeIcon className="h-4 w-4" />}>Operations</TopNavButton>
+            <TopNavButton isActive={currentCategory === 'finance'} onClick={() => setView('finance_dashboard')} icon={<FileTextIcon className="h-4 w-4" />}>Finance</TopNavButton>
+            <TopNavButton isActive={currentCategory === 'analytics'} onClick={() => setView('reports')} icon={<SearchIcon className="h-4 w-4" />}>Analytics</TopNavButton>
+            <TopNavButton isActive={currentCategory === 'admin'} onClick={() => setView('companies')} icon={<BuildingIcon className="h-4 w-4" />}>Admin</TopNavButton>
+
+            {/* External Links */}
+            <div className="w-px h-6 bg-slate-700 mx-2 self-center"></div>
+            <ExternalNavButton href="https://report.cnergy.co.in/">Reports</ExternalNavButton>
+            <ExternalNavButton href="https://prismaticdata.cnergy.co.in">Prismatic data</ExternalNavButton>
           </nav>
 
           <div className="absolute top-4 right-4 md:static flex items-center md:ml-6">
             <div className="text-right mr-3 hidden md:block">
-                <div className="text-xs font-bold text-white">{username}</div>
-                <div className="text-[9px] uppercase font-black text-[#8EBF45] bg-white/10 px-1.5 py-0.5 rounded mt-0.5">{userRole}</div>
+              <div className="text-xs font-bold text-white">{username}</div>
+              <div className="text-[9px] uppercase font-black text-[#8EBF45] bg-white/10 px-1.5 py-0.5 rounded mt-0.5">{userRole}</div>
             </div>
             <button onClick={onLogout} className="ml-3 text-slate-500 hover:text-[#8EBF45] transition-colors p-1.5 hover:bg-white/5 rounded-full" title="Logout">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -120,7 +138,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 <div className="text-[#A8BF75]">/</div>
                 <SubNavButton isActive={currentView === 'finished'} onClick={() => setView('finished')}>Finished Goods</SubNavButton>
                 <div className="w-px h-6 bg-[#A8BF75]/40 mx-2"></div>
-                <SubNavButton isActive={currentView === 'storage'} onClick={() => setView('storage')} icon={<SearchIcon className="w-3 h-3"/>}>Storage Layout</SubNavButton>
+                <SubNavButton isActive={currentView === 'storage'} onClick={() => setView('storage')} icon={<SearchIcon className="w-3 h-3" />}>Storage Layout</SubNavButton>
               </>
             )}
             {currentCategory === 'finance' && (
@@ -144,7 +162,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
               <>
                 <SubNavButton isActive={currentView === 'companies'} onClick={() => setView('companies')}>Companies</SubNavButton>
                 {userRole === 'admin' && (
-                    <SubNavButton isActive={currentView === 'users'} onClick={() => setView('users')}>Users</SubNavButton>
+                  <SubNavButton isActive={currentView === 'users'} onClick={() => setView('users')}>Users</SubNavButton>
                 )}
               </>
             )}
