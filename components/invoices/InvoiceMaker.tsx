@@ -446,7 +446,8 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 ...doc,
                 filename: invNum,
                 document_type: docType === 'invoice' ? 'generated_invoice' : 'generated_po',
-                uploaded_by: currentUser?.username || 'system'
+                uploaded_by: currentUser?.username || 'system',
+                requires_review: false
             };
 
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
