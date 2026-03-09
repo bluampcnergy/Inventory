@@ -24,32 +24,53 @@ export function useSupabase<T>(
     dataRef.current = data;
   }, [data]);
 
-  // Fetch initial data
+  // Fetch initial data — PAGINATED to bypass Supabase max_rows limit (default 1000)
   useEffect(() => {
-    const fetch = async () => {
+    const fetchAll = async () => {
       try {
-        // Prepare query
-        let query = supabase.from(tableName).select('*');
+        const PAGE_SIZE = 1000;
+        let allData: any[] = [];
+        let page = 0;
+        let hasMore = true;
 
-        // Optimisation: For large tables, sort by timestamp desc
-        if (tableName === 'test_results' || tableName === 'logs' || tableName === 'received_goods' || tableName === 'finished_goods') {
-          query = query.order('timestamp', { ascending: false });
+        while (hasMore) {
+          let query = supabase.from(tableName).select('*');
+
+          // For large tables, sort by timestamp desc
+          if (tableName === 'test_results' || tableName === 'logs' || tableName === 'received_goods' || tableName === 'finished_goods') {
+            query = query.order('timestamp', { ascending: false });
+          }
+
+          const from = page * PAGE_SIZE;
+          const to = from + PAGE_SIZE - 1;
+          const { data: dbData, error } = await query.range(from, to);
+
+          if (error) {
+            if (error.code === 'PGRST205' || error.code === '42P01') {
+              console.warn(`Supabase table '${tableName}' not found. Disabling sync. Using local data.`);
+              syncEnabled.current = false;
+              hasMore = false;
+            } else {
+              throw error;
+            }
+          } else if (dbData) {
+            allData = allData.concat(dbData);
+            // If we got fewer rows than PAGE_SIZE, we've reached the end
+            if (dbData.length < PAGE_SIZE) {
+              hasMore = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMore = false;
+          }
         }
 
-        // Large range limit to prevent data loss (default is 1000)
-        const { data: dbData, error } = await query.range(0, 50000);
-
-        if (error) {
-          if (error.code === 'PGRST205' || error.code === '42P01') {
-            console.warn(`Supabase table '${tableName}' not found. Disabling sync. Using local data.`);
-            syncEnabled.current = false;
-          } else {
-            throw error;
-          }
-        } else if (dbData) {
-          setData(dbData as unknown as T[]);
-          lastSyncedData.current = dbData as unknown as T[];
-          dataRef.current = dbData as unknown as T[];
+        if (allData.length > 0) {
+          console.log(`[useSupabase] Loaded ${allData.length} rows from '${tableName}'`);
+          setData(allData as unknown as T[]);
+          lastSyncedData.current = allData as unknown as T[];
+          dataRef.current = allData as unknown as T[];
         }
         initialFetchDone.current = true;
       } catch (error: any) {
@@ -58,7 +79,7 @@ export function useSupabase<T>(
         initialFetchDone.current = true;
       }
     };
-    fetch();
+    fetchAll();
   }, [tableName]);
 
   // Cleanup debounce timer on unmount
