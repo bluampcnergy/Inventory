@@ -36,9 +36,11 @@ export function useSupabase<T>(
         while (hasMore) {
           let query = supabase.from(tableName).select('*');
 
-          // For large tables, sort by timestamp desc
+          // Stable sort: timestamp DESC + id ASC as tiebreaker
+          // Without the secondary sort, same-timestamp rows have non-deterministic order
+          // across pages, causing rows to be skipped or duplicated
           if (tableName === 'test_results' || tableName === 'logs' || tableName === 'received_goods' || tableName === 'finished_goods') {
-            query = query.order('timestamp', { ascending: false });
+            query = query.order('timestamp', { ascending: false }).order(idKey, { ascending: true });
           }
 
           const from = page * PAGE_SIZE;
@@ -66,8 +68,16 @@ export function useSupabase<T>(
           }
         }
 
+        // Deduplicate by id — safety net against any overlap between pages
         if (allData.length > 0) {
-          console.log(`[useSupabase] Loaded ${allData.length} rows from '${tableName}'`);
+          const seen = new Set<string>();
+          allData = allData.filter((item: any) => {
+            const id = String(item[idKey]);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+          console.log(`[useSupabase] Loaded ${allData.length} unique rows from '${tableName}'`);
           setData(allData as unknown as T[]);
           lastSyncedData.current = allData as unknown as T[];
           dataRef.current = allData as unknown as T[];
