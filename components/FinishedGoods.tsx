@@ -54,7 +54,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
         const recipeName = getRecipeName(good.recipeId);
         const date = new Date(good.timestamp).toLocaleDateString('en-GB'); // DD/MM/YYYY
         const energy = (meta.voltage && meta.capacity)
-            ? (meta.voltage * meta.capacity).toFixed(1) + ' Wh'
+            ? Math.ceil(meta.voltage * meta.capacity) + ' Wh'
             : '-';
 
         return {
@@ -575,7 +575,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                         <div className="max-h-[60vh] overflow-y-auto bg-gray-50 p-2 rounded border">
                             {generateUnitIds(selectedGood, finishedGoods, recipes).map((id, index) => {
                                 const meta = selectedGood.unitMetadata?.[id];
-                                const energy = (meta?.voltage && meta?.capacity) ? (meta.voltage * meta.capacity).toFixed(1) + ' Wh' : '';
+                                const energy = (meta?.voltage && meta?.capacity) ? Math.ceil(meta.voltage * meta.capacity) + ' Wh' : '';
                                 const isDismantled = selectedGood.dismantledUnitIds?.includes(id);
                                 const isInRepair = selectedGood.inRepairUnitIds?.includes(id);
                                 const deliveredTo = selectedGood.unitDeliveries?.[id];
