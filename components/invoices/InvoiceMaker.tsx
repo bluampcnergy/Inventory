@@ -23,7 +23,15 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
 const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfiles = [], initialData, priceList = [] }) => {
     const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation'>('invoice');
     const [customTitle, setCustomTitle] = useState('INVOICE');
-    const [doc, setDoc] = useState<ExtractedInvoice>({ ...EMPTY_INVOICE, source_type: 'sales', document_type: 'generated_invoice' });
+    const [doc, setDoc] = useState<ExtractedInvoice>({ 
+        ...EMPTY_INVOICE, 
+        source_type: 'sales', 
+        document_type: 'generated_invoice',
+        issuer_details: { 
+            ...EMPTY_INVOICE.issuer_details, 
+            bank_details: { upi_id: '8956340980@ibl' } 
+        } 
+    });
 
     // Default config with showReceiverSign
     const [config, setConfig] = useState<ExtendedConfig>({
