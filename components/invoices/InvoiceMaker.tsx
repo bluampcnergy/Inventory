@@ -504,6 +504,34 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         }
 
         const fyStr = `${String(fyStart).slice(-2)}-${String(fyEnd).slice(-2)}`;
+
+        // --- NEW LOGIC (From April 2026 onwards) ---
+        // User requested this system from April 2026.
+        const NEW_SYSTEM_START = new Date(2026, 3, 1); // April 1, 2026
+        if (date >= NEW_SYSTEM_START) {
+            let typeTag = 'INV';
+            if (docType === 'po') typeTag = 'PO';
+            else if (docType === 'quotation') typeTag = 'QUO';
+
+            const newPrefix = `${typeTag}/DC/${fyStr}/`;
+            
+            // Query for the count in this specific series (irrespective of company)
+            const { count } = await supabase
+                .from('invoices')
+                .select('*', { count: 'exact', head: true })
+                .ilike('invoice_metadata->>invoice_number', `${newPrefix}%`);
+
+            const nextSeq = String((count || 0) + 1).padStart(3, '0');
+            const newNumber = `${newPrefix}${nextSeq}`;
+
+            setDoc(prev => ({
+                ...prev,
+                invoice_metadata: { ...prev.invoice_metadata, invoice_number: newNumber }
+            }));
+            return;
+        }
+
+        // --- OLD LOGIC (Pre-April 2026) ---
         const mm = String(month).padStart(2, '0');
 
         // Determine "Other Party" based on context for code
