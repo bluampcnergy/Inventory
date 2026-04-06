@@ -149,9 +149,26 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
     useEffect(() => {
         if (initialData) {
             setDoc(initialData);
-            const type = initialData.document_type === 'generated_po' ? 'po' : 'invoice';
+            const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : 'invoice';
             setDocType(type);
-            setCustomTitle(type === 'invoice' ? 'INVOICE' : 'PURCHASE ORDER');
+            setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : 'QUOTATION');
+
+            if (initialData.invoice_metadata?.ui_config) {
+                const loadedConfig = initialData.invoice_metadata.ui_config;
+                setConfig(prev => ({
+                    ...prev,
+                    ...loadedConfig,
+                    logoSize: loadedConfig.logoSize || 64,
+                    showReceiverSign: loadedConfig.showReceiverSign ?? true,
+                    showQRCode: loadedConfig.showQRCode ?? true,
+                    showTotalsTable: loadedConfig.showTotalsTable ?? true,
+                    showTaxTable: loadedConfig.showTaxTable ?? true
+                }));
+                // Load images if present
+                setLogo(loadedConfig.logoUrl || null);
+                setStamp(loadedConfig.stampUrl || null);
+                setSignature(loadedConfig.signatureUrl || null);
+            }
         }
         fetchTemplates();
     }, [initialData]);
@@ -467,8 +484,17 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
             // Force invoice number as filename
             const record = {
                 ...doc,
+                invoice_metadata: {
+                    ...doc.invoice_metadata,
+                    ui_config: {
+                        ...config,
+                        logoUrl: logo || undefined,
+                        stampUrl: stamp || undefined,
+                        signatureUrl: signature || undefined
+                    }
+                },
                 filename: invNum,
-                document_type: docType === 'invoice' ? 'generated_invoice' : 'generated_po',
+                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : 'generated_quotation',
                 uploaded_by: currentUser?.username || 'system',
                 requires_review: false
             };
