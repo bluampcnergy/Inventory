@@ -73,6 +73,7 @@ const GSTReturnPanel: React.FC = () => {
             const { data, error } = await supabase
                 .from('invoices')
                 .select('*')
+                .in('document_type', ['invoice', 'generated_invoice', 'receipt']) // Including receipts based on existing schema
                 .gte('invoice_metadata->>invoice_date', startDate)
                 .lte('invoice_metadata->>invoice_date', endDate);
 

@@ -181,6 +181,7 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                     .from('invoices')
                     .select('id')
                     .eq('invoice_metadata->>invoice_number', extracted.invoice_metadata.invoice_number)
+                    .in('document_type', [extracted.document_type]) // Check against same document type
                     .eq('requires_review', false) // Check against finalized invoices
                     .maybeSingle();
 

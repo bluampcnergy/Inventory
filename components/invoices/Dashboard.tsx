@@ -184,6 +184,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
 
     // Filters
     const [invoiceType, setInvoiceType] = useState<'purchase' | 'sales'>('purchase');
+    const [documentCategory, setDocumentCategory] = useState<'invoice' | 'po' | 'quotation' | 'proforma_invoice' | 'debit_note' | 'credit_note'>('invoice');
     const [filterStart, setFilterStart] = useState('');
     const [filterEnd, setFilterEnd] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -209,6 +210,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
                 .order('created_at', { ascending: false });
 
             query = query.eq('source_type', invoiceType);
+
+            if (documentCategory === 'invoice') {
+                query = query.in('document_type', ['invoice', 'generated_invoice', 'receipt', 'other']);
+            } else if (documentCategory === 'po') {
+                 query = query.in('document_type', ['po', 'generated_po', 'purchase_order']);
+            } else {
+                 query = query.eq('document_type', documentCategory);
+            }
 
             if (filterStart) {
                 query = query.gte('invoice_metadata->>invoice_date', filterStart);
@@ -241,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
             fetchInvoices();
         }, 500);
         return () => clearTimeout(timer);
-    }, [searchTerm, filterStart, filterEnd, invoiceType]);
+    }, [searchTerm, filterStart, filterEnd, invoiceType, documentCategory]);
 
     const handleExport = (format: 'csv' | 'json') => {
         setExporting(true);
@@ -409,6 +418,30 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
                     </div>
                 </div>
             </Modal>
+
+            {/* Document Type Categories */}
+            <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide border-b border-slate-200">
+                {[
+                    { id: 'invoice', label: 'Invoices' },
+                    { id: 'quotation', label: 'Quotations' },
+                    { id: 'po', label: 'Purchase Orders' },
+                    { id: 'proforma_invoice', label: 'Proforma Invoices' },
+                    { id: 'credit_note', label: 'Credit Notes' },
+                    { id: 'debit_note', label: 'Debit Notes' }
+                ].map(cat => (
+                    <button
+                        key={cat.id}
+                        onClick={() => setDocumentCategory(cat.id as any)}
+                        className={`whitespace-nowrap px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors
+                            ${documentCategory === cat.id 
+                                ? 'bg-white text-indigo-600 border-t-2 border-indigo-600 border-x border-slate-200 -mb-[1px]' 
+                                : 'bg-transparent text-slate-500 hover:text-slate-800'
+                            }`}
+                    >
+                        {cat.label}
+                    </button>
+                ))}
+            </div>
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>

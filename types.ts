@@ -222,7 +222,7 @@ export interface ExtractedInvoice {
   created_at?: string;
   timestamp?: string;
   filename: string;
-  document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'other';
+  document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'purchase_order' | 'quotation' | 'proforma_invoice' | 'other';
   source_type: 'sales' | 'purchase';
   issuer_details: InvoiceParty;
   receiver_details: InvoiceParty;
