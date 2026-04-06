@@ -18,6 +18,8 @@ interface InvoiceMakerProps {
 // Extend config locally to support new UI flags without breaking shared types immediately
 type ExtendedConfig = InvoiceTemplate['config'] & {
     showReceiverSign?: boolean;
+    showQRCode?: boolean;
+    showTotalsTable?: boolean;
 };
 
 const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfiles = [], initialData, priceList = [] }) => {
@@ -41,7 +43,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         footerText: 'This is a system generated invoice.',
         terms: '1. Payment due within 30 days.',
         logoSize: 64,
-        showReceiverSign: true
+        showReceiverSign: true,
+        showQRCode: true,
+        showTotalsTable: true
     });
 
     const [logo, setLogo] = useState<string | null>(null);
@@ -766,7 +770,15 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                     <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><LayoutDashboard size={14} /> Sections</h3>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
                         <input type="checkbox" checked={showSummarySection} onChange={e => setShowSummarySection(e.target.checked)} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
-                        Show Totals, Bank & Terms
+                        Show Footer Area (Totals, Bank & Terms)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                        <input type="checkbox" checked={config.showTotalsTable ?? true} onChange={e => setConfig({ ...config, showTotalsTable: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        Show Amount in Words, Subtotal, Tax & Total
+                    </label>
+                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                        <input type="checkbox" checked={config.showQRCode ?? true} onChange={e => setConfig({ ...config, showQRCode: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        Show Payment QR Code
                     </label>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
                         <input type="checkbox" checked={config.showReceiverSign ?? true} onChange={e => setConfig({ ...config, showReceiverSign: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
@@ -1133,21 +1145,23 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
                         {showSummarySection && (
                             <div className="flex flex-col border-t pt-2 mt-2">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="flex-1">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Amount in Words</p>
-                                        <textarea className="w-full text-xs font-bold text-slate-700 bg-transparent border-none focus:ring-0 outline-none resize-none overflow-hidden p-0" rows={2} value={amountInWordsStr} onChange={(e) => setAmountInWordsStr(e.target.value)} />
+                                {(config.showTotalsTable ?? true) && (
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Amount in Words</p>
+                                            <textarea className="w-full text-xs font-bold text-slate-700 bg-transparent border-none focus:ring-0 outline-none resize-none overflow-hidden p-0" rows={2} value={amountInWordsStr} onChange={(e) => setAmountInWordsStr(e.target.value)} />
+                                        </div>
+                                        <div className="w-48">
+                                            <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
+                                            <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
+                                            <div className="flex justify-between text-base font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>₹ {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
+                                        </div>
                                     </div>
-                                    <div className="w-48">
-                                        <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
-                                        <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
-                                        <div className="flex justify-between text-base font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>₹ {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
-                                    </div>
-                                </div>
+                                )}
 
                                 <div className="flex gap-8 mt-4 pt-2 border-t border-slate-100">
                                     <div className="flex-[2] flex gap-5">
-                                        {doc.issuer_details.bank_details?.upi_id && (
+                                        {(config.showQRCode ?? true) && doc.issuer_details.bank_details?.upi_id && (
                                             <div className="flex-shrink-0 bg-white p-1 border rounded shadow-sm self-start">
                                                 <QRCodeSVG 
                                                     value={`upi://pay?pa=${doc.issuer_details.bank_details.upi_id}&pn=${encodeURIComponent(doc.issuer_details.name || '')}&am=${doc.totals.grand_total}&cu=INR`}
@@ -1350,20 +1364,22 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                     {/* ---- SUMMARY ---- */}
                                     {showSummarySection && (
                                         <div className="flex flex-col border-t pt-1 mt-1">
-                                            <div className="flex justify-between items-start gap-4">
-                                                <div className="flex-1">
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase">Amount in Words</p>
-                                                    <p className="text-[10px] font-bold text-slate-700">{amountInWordsStr}</p>
+                                            {(config.showTotalsTable ?? true) && (
+                                                <div className="flex justify-between items-start gap-4">
+                                                    <div className="flex-1">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase">Amount in Words</p>
+                                                        <p className="text-[10px] font-bold text-slate-700">{amountInWordsStr}</p>
+                                                    </div>
+                                                    <div className="w-44">
+                                                        <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
+                                                        <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
+                                                        <div className="flex justify-between text-sm font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>₹ {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
+                                                    </div>
                                                 </div>
-                                                <div className="w-44">
-                                                    <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
-                                                    <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
-                                                    <div className="flex justify-between text-sm font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>₹ {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
-                                                </div>
-                                            </div>
+                                            )}
                                             <div className="flex gap-6 mt-2 pt-1 border-t border-slate-100">
                                                 <div className="flex-[2] flex gap-4">
-                                                    {doc.issuer_details.bank_details?.upi_id && (
+                                                    {(config.showQRCode ?? true) && doc.issuer_details.bank_details?.upi_id && (
                                                         <div className="flex-shrink-0 bg-white p-1 border rounded shadow-sm self-start">
                                                             <QRCodeSVG 
                                                                 value={`upi://pay?pa=${doc.issuer_details.bank_details.upi_id}&pn=${encodeURIComponent(doc.issuer_details.name || '')}&am=${doc.totals.grand_total}&cu=INR`}
