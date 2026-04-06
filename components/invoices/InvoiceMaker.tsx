@@ -20,6 +20,7 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
     showReceiverSign?: boolean;
     showQRCode?: boolean;
     showTotalsTable?: boolean;
+    showTaxTable?: boolean;
 };
 
 const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfiles = [], initialData, priceList = [] }) => {
@@ -45,7 +46,8 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         logoSize: 64,
         showReceiverSign: true,
         showQRCode: true,
-        showTotalsTable: true
+        showTotalsTable: true,
+        showTaxTable: true
     });
 
     const [logo, setLogo] = useState<string | null>(null);
@@ -54,7 +56,6 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
     const [isSaving, setIsSaving] = useState(false);
 
     // Visibility States
-    const [showSummarySection, setShowSummarySection] = useState(true);
     const [showNoteSection, setShowNoteSection] = useState(false);
 
     // Editable labels for Billed To / Shipped To
@@ -769,12 +770,12 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 <div className="mb-6 space-y-3 border-b pb-6">
                     <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><LayoutDashboard size={14} /> Sections</h3>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                        <input type="checkbox" checked={showSummarySection} onChange={e => setShowSummarySection(e.target.checked)} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
-                        Show Footer Area (Totals, Bank & Terms)
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
                         <input type="checkbox" checked={config.showTotalsTable ?? true} onChange={e => setConfig({ ...config, showTotalsTable: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
                         Show Amount in Words, Subtotal, Tax & Total
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                        <input type="checkbox" checked={config.showTaxTable ?? true} onChange={e => setConfig({ ...config, showTaxTable: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        Show Tax Breakdown Table
                     </label>
                      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
                         <input type="checkbox" checked={config.showQRCode ?? true} onChange={e => setConfig({ ...config, showQRCode: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
@@ -1061,7 +1062,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                         </div>
 
                         {/* Grouped Tax Breakdown Table (Editable Rate per group) */}
-                        {doc.items.length > 0 && (() => {
+                        {(config.showTaxTable ?? true) && doc.items.length > 0 && (() => {
                             const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
                             const taxGroups: { [key: string]: { key: string; hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
                             doc.items.forEach(item => {
@@ -1143,8 +1144,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                             );
                         })()}
 
-                        {showSummarySection && (
-                            <div className="flex flex-col border-t pt-2 mt-2">
+                        <div className="flex flex-col border-t pt-2 mt-2">
                                 {(config.showTotalsTable ?? true) && (
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex-1">
@@ -1189,7 +1189,6 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                     </div>
                                 </div>
                             </div>
-                        )}
 
                         <div className="flex justify-between items-end mt-6 pt-4 break-inside-avoid relative">
                             {(config.showReceiverSign ?? true) && (
@@ -1310,7 +1309,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                     </div>
 
                                     {/* ---- TAX BREAKDOWN (Grouped) ---- */}
-                                    {doc.items.length > 0 && (() => {
+                                    {(config.showTaxTable ?? true) && doc.items.length > 0 && (() => {
                                         const taxGrps: { [k: string]: { hsn: string; taxableValue: number; rate: number; cgst: number; sgst: number; igst: number; totalTax: number } } = {};
                                         doc.items.forEach(item => {
                                             const rate = Number(item.igst_rate || 0);
@@ -1362,8 +1361,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                     })()}
 
                                     {/* ---- SUMMARY ---- */}
-                                    {showSummarySection && (
-                                        <div className="flex flex-col border-t pt-1 mt-1">
+                                    <div className="flex flex-col border-t pt-1 mt-1">
                                             {(config.showTotalsTable ?? true) && (
                                                 <div className="flex justify-between items-start gap-4">
                                                     <div className="flex-1">
@@ -1407,7 +1405,6 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
 
                                     {/* ---- SIGNATURES ---- */}
                                     <div className="flex justify-between items-end mt-auto pt-3 break-inside-avoid relative">
