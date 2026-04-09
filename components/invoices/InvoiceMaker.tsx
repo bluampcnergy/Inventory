@@ -160,7 +160,11 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
     useEffect(() => {
         if (initialData) {
-            setDoc(initialData);
+            const dataToLoad = { ...initialData };
+            if ((dataToLoad.invoice_metadata as any)?.shipped_to_details) {
+                dataToLoad.shipped_to_details = (dataToLoad.invoice_metadata as any).shipped_to_details;
+            }
+            setDoc(dataToLoad);
             const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : 'invoice';
             setDocType(type);
             setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : 'QUOTATION');
@@ -501,6 +505,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 ...doc,
                 invoice_metadata: {
                     ...doc.invoice_metadata,
+                    shipped_to_details: doc.shipped_to_details,
                     ui_config: {
                         ...config,
                         logoUrl: logo || undefined,
@@ -518,7 +523,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
             };
 
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { id, timestamp, ...cleanRecord } = record as any;
+            const { id, timestamp, shipped_to_details, ...cleanRecord } = record as any;
             const { error: insertError } = await supabase.from('invoices').insert([cleanRecord]);
             if (insertError) throw insertError;
 

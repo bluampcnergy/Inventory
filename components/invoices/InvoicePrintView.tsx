@@ -115,6 +115,8 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
 
 
 
+    const actualShippedTo = doc.shipped_to_details || (doc.invoice_metadata as any)?.shipped_to_details;
+
     const handlePrint = () => {
         window.print();
     };
@@ -206,11 +208,11 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{config.shippedToLabel || 'Shipped To'}</p>
-                                        <h3 className="font-bold text-sm text-slate-900 leading-tight">{safeRender(doc.shipped_to_details?.name) || safeRender(doc.receiver_details?.name) || 'Client Name'}</h3>
-                                        <p className="text-xs text-slate-600 whitespace-pre-line mb-1 leading-tight">{safeRender(doc.shipped_to_details?.address) || safeRender(doc.receiver_details?.address)}</p>
+                                        <h3 className="font-bold text-sm text-slate-900 leading-tight">{safeRender(actualShippedTo?.name) || safeRender(doc.receiver_details?.name) || 'Client Name'}</h3>
+                                        <p className="text-xs text-slate-600 whitespace-pre-line mb-1 leading-tight">{safeRender(actualShippedTo?.address) || safeRender(doc.receiver_details?.address)}</p>
                                         <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
-                                            {(doc.shipped_to_details?.gstin || doc.receiver_details?.gstin) && <span><strong>GSTIN:</strong> {doc.shipped_to_details?.gstin || doc.receiver_details?.gstin}</span>}
-                                            {(doc.shipped_to_details?.phone || doc.receiver_details?.phone) && <span>Ph: {doc.shipped_to_details?.phone || doc.receiver_details?.phone}</span>}
+                                            {(actualShippedTo?.gstin || doc.receiver_details?.gstin) && <span><strong>GSTIN:</strong> {actualShippedTo?.gstin || doc.receiver_details?.gstin}</span>}
+                                            {(actualShippedTo?.phone || doc.receiver_details?.phone) && <span>Ph: {actualShippedTo?.phone || doc.receiver_details?.phone}</span>}
                                         </div>
                                     </div>
                                 </div>
