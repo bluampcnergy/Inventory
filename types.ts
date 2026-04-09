@@ -16,7 +16,8 @@ export type View =
   | 'finance_gst'
   | 'finance_expenses'
   | 'finance_prices'
-  | 'finance_maker';
+  | 'finance_maker'
+  | 'supplies';
 
 export interface PriceListItem {
   id: string;
@@ -215,6 +216,19 @@ export interface InvoiceItem {
   igst_rate?: number;
   igst_amount?: number;
   total_value: number;
+}
+
+export interface SupplyRecord {
+  id: string;
+  item_name: string;
+  direction: 'inward' | 'outward';
+  from_company?: string;
+  to_company?: string;
+  is_ordered: boolean;
+  is_received: boolean;
+  is_shipped: boolean;
+  timestamp: number;
+  created_by?: string;
 }
 
 export interface ExtractedInvoice {

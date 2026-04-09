@@ -66,7 +66,7 @@ const ExternalNavButton: React.FC<{ href: string; children: React.ReactNode; ico
 const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRole, onLogout }) => {
 
   const categories = useMemo(() => ({
-    operations: ['received', 'testing', 'wip', 'finished', 'storage'] as View[],
+    operations: ['received', 'testing', 'wip', 'finished', 'storage', 'supplies'] as View[],
     finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_prices', 'finance_maker'] as View[],
     analytics: ['ai_assistant', 'reports', 'master', 'log'] as View[],
     admin: ['companies', 'users'] as View[],
@@ -139,6 +139,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 <SubNavButton isActive={currentView === 'finished'} onClick={() => setView('finished')}>Finished Goods</SubNavButton>
                 <div className="w-px h-6 bg-[#A8BF75]/40 mx-2"></div>
                 <SubNavButton isActive={currentView === 'storage'} onClick={() => setView('storage')} icon={<SearchIcon className="w-3 h-3" />}>Storage Layout</SubNavButton>
+                <div className="w-px h-6 bg-[#A8BF75]/40 mx-2"></div>
+                <SubNavButton isActive={currentView === 'supplies'} onClick={() => setView('supplies')}>Supplies Record</SubNavButton>
               </>
             )}
             {currentCategory === 'finance' && (

@@ -11,6 +11,7 @@ import ViewLog from './components/ViewLog';
 import UserManagement from './components/UserManagement';
 import MasterData from './components/MasterData';
 import CompanyProfiles from './components/CompanyProfiles';
+import SuppliesRecord from './components/SuppliesRecord';
 import InvoiceModule from './components/invoices/InvoiceModule'; 
 import AiChatPanel from './components/invoices/AiChatPanel';
 import StorageManager from './components/RackSearch'; 
@@ -18,7 +19,7 @@ import PublicStorageViewer from './components/PublicStorageViewer'; // New Impor
 import Footer from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabase } from './hooks/useSupabase';
-import type { ReceivedGood, Recipe, WIPItem, FinishedGood, RepairItem, User, LogEntry, TestResult, CompanyProfile, ExtractedInvoice, View, StorageRoom, StorageUnit, StorageItem } from './types';
+import type { ReceivedGood, Recipe, WIPItem, FinishedGood, RepairItem, User, LogEntry, TestResult, CompanyProfile, ExtractedInvoice, View, StorageRoom, StorageUnit, StorageItem, SupplyRecord } from './types';
 import { DUMMY_RECEIVED_GOODS, DUMMY_RECIPES, DUMMY_WIP_ITEMS, DUMMY_FINISHED_GOODS, DUMMY_COMPANY_PROFILES } from './dummyData';
 
 const App: React.FC = () => {
@@ -47,6 +48,7 @@ const App: React.FC = () => {
   const [rooms, setRooms] = useSupabase<StorageRoom>('storage_rooms', []);
   const [storageUnits, setStorageUnits] = useSupabase<StorageUnit>('storage_units', []);
   const [storageItems, setStorageItems] = useSupabase<StorageItem>('storage_items', []);
+  const [suppliesRecords, setSuppliesRecords] = useSupabase<SupplyRecord>('supplies_records', []);
 
   // State for transferring data from Reports to Invoice Maker
   const [invoiceDraft, setInvoiceDraft] = useState<ExtractedInvoice | null>(null);
@@ -231,6 +233,15 @@ const App: React.FC = () => {
             receivedGoods={receivedGoods}
             addLogEntry={addLogEntry}
         />;
+      case 'supplies':
+        return <SuppliesRecord
+            suppliesRecords={suppliesRecords}
+            setSuppliesRecords={setSuppliesRecords}
+            companyProfiles={companyProfiles}
+            addLogEntry={addLogEntry}
+            currentUser={currentUser}
+        />;
+
       case 'reports':
         return <Reports 
           receivedGoods={receivedGoods} 
@@ -282,7 +293,7 @@ const App: React.FC = () => {
       default:
         return null;
     }
-  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems]);
+  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords]);
 
   // --- MASTER SEARCH IFRAME ROUTE ---
   if (mode === 'master_search') {
