@@ -85,7 +85,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between h-auto md:h-16">
           <div className="flex items-center justify-between py-3 md:py-0 mr-8">
-            <div className="flex items-center cursor-pointer gap-3" onClick={() => setView('finance_dashboard')}>
+            <div className="flex items-center cursor-pointer gap-3" onClick={() => setView('received')}>
               <img
                 src="https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Logo/DC_Full_battery_black_bg.png"
                 alt="Datlion Cnergy Logo"

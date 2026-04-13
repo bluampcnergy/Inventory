@@ -14,10 +14,12 @@ import CompanyProfiles from './components/CompanyProfiles';
 import SuppliesRecord from './components/SuppliesRecord';
 import InvoiceModule from './components/invoices/InvoiceModule'; 
 import AiChatPanel from './components/invoices/AiChatPanel';
+import FinanceLock from './components/FinanceLock';
 import StorageManager from './components/RackSearch'; 
 import PublicStorageViewer from './components/PublicStorageViewer'; // New Import
 import Footer from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useSessionStorage } from './hooks/useSessionStorage';
 import { useSupabase } from './hooks/useSupabase';
 import type { ReceivedGood, Recipe, WIPItem, FinishedGood, RepairItem, User, LogEntry, TestResult, CompanyProfile, ExtractedInvoice, View, StorageRoom, StorageUnit, StorageItem, SupplyRecord } from './types';
 import { DUMMY_RECEIVED_GOODS, DUMMY_RECIPES, DUMMY_WIP_ITEMS, DUMMY_FINISHED_GOODS, DUMMY_COMPANY_PROFILES } from './dummyData';
@@ -32,7 +34,7 @@ const App: React.FC = () => {
   
   // Auth state
   const [users, setUsers] = useSupabase<User>('app_users', [], 'username');
-  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('currentUser', null);
+  const [currentUser, setCurrentUser] = useSessionStorage<User | null>('currentUser', null);
 
   // App data state - synchronized with Supabase
   const [receivedGoods, setReceivedGoods] = useSupabase<ReceivedGood>('received_goods', DUMMY_RECEIVED_GOODS);
@@ -52,6 +54,7 @@ const App: React.FC = () => {
 
   // State for transferring data from Reports to Invoice Maker
   const [invoiceDraft, setInvoiceDraft] = useState<ExtractedInvoice | null>(null);
+  const [isFinanceUnlocked, setIsFinanceUnlocked] = useState(false);
 
   // State for transferring data from Testing to WIP (Start Production)
   const [productionDraft, setProductionDraft] = useState<{ receivedGoodId: string; serials: string[] } | null>(null);
@@ -146,6 +149,9 @@ const App: React.FC = () => {
   const renderView = useCallback(() => {
     // Handle Finance Sub-routes
     if (view.startsWith('finance_')) {
+        if (!isFinanceUnlocked) {
+            return <FinanceLock onUnlock={() => setIsFinanceUnlocked(true)} />;
+        }
         const tab = view.replace('finance_', '') as any;
         return <InvoiceModule 
             currentUser={currentUser} 
@@ -293,7 +299,7 @@ const App: React.FC = () => {
       default:
         return null;
     }
-  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords]);
+  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords, isFinanceUnlocked]);
 
   // --- MASTER SEARCH IFRAME ROUTE ---
   if (mode === 'master_search') {
