@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedInvoice } from "../types";
 
-// Hardcoded API Key as requested for deployment
-const API_KEY = "AIzaSyCDFgD0ifdA-yepk9ZtuW5VKYpJleO5zAU";
+// Read from Vercel env var (injected by vite.config.ts), fallback to legacy key
+const API_KEY = (process.env.GEMINI_API_KEY || process.env.API_KEY || "AIzaSyCDFgD0ifdA-yepk9ZtuW5VKYpJleO5zAU");
 
 const invoiceSchema = {
   type: Type.OBJECT,
