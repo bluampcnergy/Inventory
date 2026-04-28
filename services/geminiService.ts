@@ -2,8 +2,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedInvoice } from "../types";
 
-// Read from Vercel env var (injected by vite.config.ts), fallback to legacy key
-const API_KEY = (process.env.GEMINI_API_KEY || process.env.API_KEY || "AIzaSyCDFgD0ifdA-yepk9ZtuW5VKYpJleO5zAU");
+// Read from Vercel env var (injected by vite.config.ts) — no hardcoded fallback
+const API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+if (!API_KEY) {
+  console.error("GEMINI_API_KEY is not configured. Set it in Vercel environment variables.");
+}
 
 const invoiceSchema = {
   type: Type.OBJECT,
