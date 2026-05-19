@@ -92,7 +92,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
 
     const doc = invoice;
     const docType = doc.document_type || 'invoice';
-    const customTitle = docType === 'generated_po' ? 'PURCHASE ORDER' : docType === 'quotation' ? 'QUOTATION' : 'INVOICE';
+    const customTitle = docType === 'generated_po' ? 'PURCHASE ORDER' : docType === 'generated_quotation' ? 'QUOTATION' : docType === 'generated_proforma_invoice' ? 'PROFORMA INVOICE' : 'INVOICE';
     const amountInWordsStr = amountToWords(doc.totals?.grand_total || 0, doc.totals?.currency);
     const taxMode = getTaxMode(doc.issuer_details?.gstin, doc.receiver_details?.gstin, doc.invoice_metadata?.tax_mode);
     const currencySymbol = getCurrencySymbol(doc.totals?.currency);
@@ -197,7 +197,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
                                 {/* RECEIVER (Billed + Shipped) */}
                                 <div className="mb-3 flex gap-6">
                                     <div className="flex-1">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{config.billedToLabel || (docType === 'quotation' ? 'Quotation For' : docType === 'generated_po' ? 'Vendor' : 'Billed To')}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{config.billedToLabel || (docType === 'generated_quotation' ? 'Quotation For' : docType === 'generated_po' ? 'Vendor' : docType === 'generated_proforma_invoice' ? 'Proforma To' : 'Billed To')}</p>
                                         <h3 className="font-bold text-sm text-slate-900 leading-tight">{safeRender(doc.receiver_details?.name) || 'Client Name'}</h3>
                                         <p className="text-xs text-slate-600 whitespace-pre-line mb-1 leading-tight">{safeRender(doc.receiver_details?.address)}</p>
                                         <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 items-center">

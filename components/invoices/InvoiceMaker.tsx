@@ -36,7 +36,7 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
 };
 
 const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfiles = [], initialData, priceList = [] }) => {
-    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation'>('invoice');
+    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation' | 'proforma'>('invoice');
     const [customTitle, setCustomTitle] = useState('INVOICE');
     const [doc, setDoc] = useState<ExtractedInvoice>({ 
         ...EMPTY_INVOICE, 
@@ -197,9 +197,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 dataToLoad.shipped_to_details = (dataToLoad.invoice_metadata as any).shipped_to_details;
             }
             setDoc(dataToLoad);
-            const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : 'invoice';
+            const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : initialData.document_type === 'generated_proforma_invoice' ? 'proforma' : 'invoice';
             setDocType(type);
-            setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : 'QUOTATION');
+            setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
 
             if (initialData.invoice_metadata?.ui_config) {
                 const loadedConfig = initialData.invoice_metadata.ui_config;
@@ -549,7 +549,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                     }
                 },
                 filename: invNum,
-                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : 'generated_quotation',
+                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : docType === 'quotation' ? 'generated_quotation' : 'generated_proforma_invoice',
                 uploaded_by: currentUser?.username || 'system',
                 requires_review: false
             };
@@ -598,6 +598,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
             let typeTag = 'INV';
             if (docType === 'po') typeTag = 'PO';
             else if (docType === 'quotation') typeTag = 'QUO';
+            else if (docType === 'proforma') typeTag = 'PRO';
 
             const newPrefix = `${typeTag}/DC/${fyStr}/`;
             
@@ -621,14 +622,14 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         const mm = String(month).padStart(2, '0');
 
         // Determine "Other Party" based on context for code
-        const otherPartyName = docType === 'invoice' ? doc.receiver_details.name : doc.issuer_details.name;
+        const otherPartyName = docType === 'invoice' || docType === 'proforma' ? doc.receiver_details.name : doc.issuer_details.name;
         let code = 'XX';
         if (otherPartyName) {
             code = otherPartyName.replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase();
         }
 
-        // Handle Prefix (DC for Invoice/PO, Q for Quotation)
-        const prefixBase = docType === 'quotation' ? 'Q' : 'DC';
+        // Handle Prefix (DC for Invoice/PO, Q for Quotation, P for Proforma)
+        const prefixBase = docType === 'quotation' ? 'Q' : docType === 'proforma' ? 'P' : 'DC';
         const fyPrefix = `${prefixBase}.${code}.${fyStr}.`;
 
         // Fetch count for THIS financial year to reset numbering
@@ -713,6 +714,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                         <button onClick={() => { setDocType('invoice'); setCustomTitle('INVOICE'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'invoice' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Invoice</button>
                         <button onClick={() => { setDocType('quotation'); setCustomTitle('QUOTATION'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'quotation' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Quote</button>
                         <button onClick={() => { setDocType('po'); setCustomTitle('PURCHASE ORDER'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'po' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>PO</button>
+                        <button onClick={() => { setDocType('proforma'); setCustomTitle('PROFORMA INVOICE'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'proforma' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Proforma</button>
                     </div>
                 </div>
 

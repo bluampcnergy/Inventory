@@ -215,6 +215,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
                 query = query.in('document_type', ['invoice', 'generated_invoice', 'receipt', 'other']);
             } else if (documentCategory === 'po') {
                  query = query.in('document_type', ['po', 'generated_po', 'purchase_order']);
+            } else if (documentCategory === 'quotation') {
+                 query = query.in('document_type', ['quotation', 'generated_quotation']);
+            } else if (documentCategory === 'proforma_invoice') {
+                 query = query.in('document_type', ['proforma_invoice', 'generated_proforma_invoice']);
+            } else if (documentCategory === 'debit_note') {
+                 query = query.in('document_type', ['debit_note', 'generated_debit_note']);
+            } else if (documentCategory === 'credit_note') {
+                 query = query.in('document_type', ['credit_note', 'generated_credit_note']);
             } else {
                  query = query.eq('document_type', documentCategory);
             }
