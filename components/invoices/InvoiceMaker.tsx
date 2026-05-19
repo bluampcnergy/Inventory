@@ -1253,6 +1253,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                         <div className="w-48">
                                             <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
                                             <div className="flex justify-between text-xs text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
+                                            {(doc.totals.rounding_adjustment || 0) !== 0 && <div className="flex justify-between text-xs text-slate-500 mb-0.5"><span>Rounding</span><span>{(doc.totals.rounding_adjustment || 0) > 0 ? '+' : ''}{(doc.totals.rounding_adjustment || 0).toFixed(2)}</span></div>}
                                             <div className="flex justify-between text-base font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>{currencySymbol} {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
                                         </div>
                                     </div>
@@ -1470,6 +1471,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                                     <div className="w-44">
                                                         <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Subtotal</span><span>{(doc.totals.subtotal_taxable || 0).toFixed(2)}</span></div>
                                                         <div className="flex justify-between text-[10px] text-slate-600 mb-0.5"><span>Tax</span><span>{((doc.totals.cgst_total || 0) + (doc.totals.sgst_total || 0) + (doc.totals.igst_total || 0)).toFixed(2)}</span></div>
+                                                        {(doc.totals.rounding_adjustment || 0) !== 0 && <div className="flex justify-between text-[10px] text-slate-500 mb-0.5"><span>Rounding</span><span>{(doc.totals.rounding_adjustment || 0) > 0 ? '+' : ''}{(doc.totals.rounding_adjustment || 0).toFixed(2)}</span></div>}
                                                         <div className="flex justify-between text-sm font-bold border-t border-slate-300 pt-1 mt-1" style={{ color: config.color }}><span>Total</span><span>{currencySymbol} {(doc.totals.grand_total || 0).toFixed(2)}</span></div>
                                                     </div>
                                                 </div>

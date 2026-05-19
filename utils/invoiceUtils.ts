@@ -23,19 +23,18 @@ export const getTaxMode = (issuerGSTIN: string | undefined, receiverGSTIN: strin
 };
 
 export const calculateItemTotal = (item: InvoiceItem): number => {
-  const total = (item.taxable_value || 0) + (item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0);
-  return Math.ceil(total);
+  return (item.taxable_value || 0) + (item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0);
 };
 
 export const recalculateInvoiceTotals = (items: InvoiceItem[]): any => {
-  const result = items.reduce(
+  const raw = items.reduce(
     (acc, item) => {
-      acc.subtotal_taxable += Math.ceil(item.taxable_value || 0);
-      acc.discount_total += Math.ceil(item.discount || 0);
-      acc.cgst_total += Math.ceil(item.cgst_amount || 0);
-      acc.sgst_total += Math.ceil(item.sgst_amount || 0);
-      acc.igst_total += Math.ceil(item.igst_amount || 0);
-      acc.grand_total += calculateItemTotal(item);
+      acc.subtotal_taxable += item.taxable_value || 0;
+      acc.discount_total += item.discount || 0;
+      acc.cgst_total += item.cgst_amount || 0;
+      acc.sgst_total += item.sgst_amount || 0;
+      acc.igst_total += item.igst_amount || 0;
+      acc.raw_grand_total += calculateItemTotal(item);
       return acc;
     },
     {
@@ -44,16 +43,19 @@ export const recalculateInvoiceTotals = (items: InvoiceItem[]): any => {
       cgst_total: 0,
       sgst_total: 0,
       igst_total: 0,
-      grand_total: 0,
+      raw_grand_total: 0,
     }
   );
+  const roundedGrandTotal = Math.ceil(raw.raw_grand_total);
+  const rounding_adjustment = roundedGrandTotal - raw.raw_grand_total;
   return {
-    subtotal_taxable: Math.ceil(result.subtotal_taxable),
-    discount_total: Math.ceil(result.discount_total),
-    cgst_total: Math.ceil(result.cgst_total),
-    sgst_total: Math.ceil(result.sgst_total),
-    igst_total: Math.ceil(result.igst_total),
-    grand_total: Math.ceil(result.grand_total),
+    subtotal_taxable: raw.subtotal_taxable,
+    discount_total: raw.discount_total,
+    cgst_total: raw.cgst_total,
+    sgst_total: raw.sgst_total,
+    igst_total: raw.igst_total,
+    rounding_adjustment,
+    grand_total: roundedGrandTotal,
   };
 };
 
