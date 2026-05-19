@@ -18,8 +18,8 @@ export const getTaxMode = (issuerGSTIN: string | undefined, receiverGSTIN: strin
   if (override) return override;
   const issuerState = getStateCodeFromGSTIN(issuerGSTIN);
   const receiverState = getStateCodeFromGSTIN(receiverGSTIN);
-  if (issuerState && receiverState && issuerState === receiverState) return 'intra';
-  return 'inter';
+  if (issuerState && receiverState && issuerState !== receiverState) return 'inter';
+  return 'intra';
 };
 
 export const calculateItemTotal = (item: InvoiceItem): number => {
