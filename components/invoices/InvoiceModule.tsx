@@ -10,6 +10,7 @@ import InvoiceMaker from './InvoiceMaker';
 import PriceList from './PriceList';
 import { extractInvoiceData } from '../../services/geminiService';
 import { extractInvoiceDataLocal, testOllamaConnection } from '../../services/ollamaService';
+import { extractInvoiceDataOpenRouter, testOpenRouterConnection } from '../../services/openrouterService';
 import { ExtractedInvoice, EMPTY_INVOICE, User, CompanyProfile, PriceListItem } from '../../types';
 import { Loader2, Save, RotateCcw, AlertCircle, CheckCircle, SettingsIcon, CloudLightning, AlertTriangle, FileText, MessageSquare, Cpu } from './Icons';
 import { supabase } from '../../supabaseClient';
@@ -24,7 +25,7 @@ if (pdfjs.GlobalWorkerOptions) {
 }
 
 type ActiveTab = 'upload' | 'dashboard' | 'expenses' | 'gst' | 'maker' | 'prices';
-type AIProvider = 'gemini' | 'ollama';
+type AIProvider = 'gemini' | 'ollama' | 'openrouter';
 
 // Batch Job Interface
 interface BatchJob {
@@ -64,6 +65,12 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
     const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
     const [ollamaModel, setOllamaModel] = useState("qwen3-vl:235b-cloud");
     const [ollamaKey, setOllamaKey] = useState("");
+
+    // OpenRouter Config State
+    const [openRouterKey, setOpenRouterKey] = useState("");
+    const [openRouterModel, setOpenRouterModel] = useState("nvidia/nemotron-nano-12b-v2-vl:free");
+    const [openRouterStatus, setOpenRouterStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+    const [isTestingOpenRouter, setIsTestingOpenRouter] = useState(false);
 
     // --- Initial Load: Fetch Pending Reviews ---
     useEffect(() => {
@@ -168,6 +175,10 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
             if (aiProvider === 'ollama') {
                 extracted = await extractInvoiceDataLocal(
                     base64Data, mimeType, job.file.name, ollamaUrl, ollamaModel, ollamaKey
+                );
+            } else if (aiProvider === 'openrouter') {
+                extracted = await extractInvoiceDataOpenRouter(
+                    base64Data, mimeType, job.file.name, openRouterKey, openRouterModel
                 );
             } else {
                 // Gemini (Uses hardcoded API KEY in service)
@@ -360,7 +371,7 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                                         className="bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                                     >
                                         <SettingsIcon size={16} />
-                                        {aiProvider === 'gemini' ? 'Gemini' : 'Ollama'}
+                                        {aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'ollama' ? 'Ollama' : 'OpenRouter'}
                                     </button>
 
                                     {showSettings && (
@@ -384,6 +395,13 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                                                     <Cpu size={16} className={aiProvider === 'ollama' ? "text-indigo-600" : "text-slate-400"} />
                                                     Ollama (Local)
                                                 </button>
+                                                <button
+                                                    onClick={() => setAiProvider('openrouter')}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${aiProvider === 'openrouter' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'hover:bg-slate-50 border border-transparent'}`}
+                                                >
+                                                    <Cpu size={16} className={aiProvider === 'openrouter' ? "text-emerald-600" : "text-slate-400"} />
+                                                    OpenRouter
+                                                </button>
                                             </div>
 
                                             {aiProvider === 'ollama' && (
@@ -402,10 +420,45 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                                                     </div>
                                                 </div>
                                             )}
+                                            {aiProvider === 'openrouter' && (
+                                                <div className="pt-3 border-t border-slate-100 space-y-2">
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Model Name</label>
+                                                        <input className="w-full text-xs p-1.5 border rounded" value={openRouterModel} onChange={e => setOpenRouterModel(e.target.value)} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">API Key</label>
+                                                        <input className="w-full text-xs p-1.5 border rounded" type="password" placeholder={process.env.OPENROUTER_API_KEY ? "Using Vercel Env Var" : "Enter API Key"} value={openRouterKey} onChange={e => setOpenRouterKey(e.target.value)} />
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            setIsTestingOpenRouter(true);
+                                                            setOpenRouterStatus(null);
+                                                            try {
+                                                                const res = await testOpenRouterConnection(openRouterKey, openRouterModel);
+                                                                setOpenRouterStatus(res);
+                                                            } catch (err: any) {
+                                                                setOpenRouterStatus({ success: false, message: err.message });
+                                                            } finally {
+                                                                setIsTestingOpenRouter(false);
+                                                            }
+                                                        }}
+                                                        disabled={isTestingOpenRouter}
+                                                        className="w-full bg-slate-800 text-white text-xs py-1.5 px-3 rounded hover:bg-slate-900 transition-colors disabled:opacity-50 font-bold"
+                                                    >
+                                                        {isTestingOpenRouter ? "Testing..." : "Test Connection"}
+                                                    </button>
+                                                    {openRouterStatus && (
+                                                        <p className={`text-[10px] p-1.5 rounded border leading-tight ${openRouterStatus.success ? "bg-green-50 text-green-700 border-green-100" : "bg-red-50 text-red-700 border-red-100"}`}>
+                                                            {openRouterStatus.message}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                             {aiProvider === 'gemini' && (
                                                 <div className="pt-3 border-t border-slate-100">
                                                     <p className="text-[10px] text-slate-500 bg-blue-50 p-2 rounded border border-blue-100">
-                                                        Using secure hardcoded API Key.
+                                                        Using secure Vercel API Key.
                                                     </p>
                                                 </div>
                                             )}

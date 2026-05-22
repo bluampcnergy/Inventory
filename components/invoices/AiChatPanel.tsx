@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { generateTextResponse } from '../../services/geminiService';
 import { generateTextResponseLocal, testOllamaConnection } from '../../services/ollamaService';
+import { generateTextResponseOpenRouter, testOpenRouterConnection } from '../../services/openrouterService';
 import { SettingsIcon, MessageSquare, Send, Loader2, AlertCircle, CloudLightning, AlertTriangle } from './Icons';
 import { SparklesIcon } from '../icons/SparklesIcon';
 import { ReceivedGood, FinishedGood, WIPItem, ExtractedInvoice } from '../../types';
 import { supabase } from '../../supabaseClient';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
-type AIProvider = 'gemini' | 'ollama';
+type AIProvider = 'gemini' | 'ollama' | 'openrouter';
 
 interface AiChatPanelProps {
     currentUser: { username: string } | null;
@@ -40,6 +41,9 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
     const [localModelName, setLocalModelName] = useLocalStorage<string>('ai_local_model', defaultModel);
     const [localApiKey, setLocalApiKey] = useLocalStorage<string>('ai_local_key', defaultKey);
 
+    const [openRouterKey, setOpenRouterKey] = useLocalStorage<string>('ai_openrouter_key', '');
+    const [openRouterModel, setOpenRouterModel] = useLocalStorage<string>('ai_openrouter_model', 'nvidia/nemotron-nano-12b-v2-vl:free');
+
     // Helper: Check for Mixed Content
     const isMixedContent = window.location.protocol === 'https:' && localModelUrl.startsWith('http:');
 
@@ -54,8 +58,13 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
 
     const handleTestConnection = async () => {
         setTestStatus({ message: 'Testing connection...' });
-        const result = await testOllamaConnection(localModelUrl, localApiKey);
-        setTestStatus(result);
+        if (aiProvider === 'openrouter') {
+            const result = await testOpenRouterConnection(openRouterKey, openRouterModel);
+            setTestStatus(result);
+        } else {
+            const result = await testOllamaConnection(localModelUrl, localApiKey);
+            setTestStatus(result);
+        }
     };
 
     const buildSystemContext = () => {
@@ -99,6 +108,8 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
             let responseText = '';
             if (aiProvider === 'ollama') {
                 responseText = await generateTextResponseLocal(fullPrompt, localModelUrl, localModelName, localApiKey);
+            } else if (aiProvider === 'openrouter') {
+                responseText = await generateTextResponseOpenRouter(fullPrompt, openRouterKey, openRouterModel);
             } else {
                 responseText = await generateTextResponse(fullPrompt);
             }
@@ -122,9 +133,9 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
                 <div className="relative">
                     <button 
                         onClick={() => setShowSettings(!showSettings)}
-                        className={`text-xs px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${aiProvider === 'ollama' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}
+                        className={`text-xs px-3 py-1 rounded-full border transition-all flex items-center gap-1 ${aiProvider === 'ollama' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : aiProvider === 'openrouter' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-600'}`}
                     >
-                        <SettingsIcon size={12} /> Provider: {aiProvider === 'ollama' ? 'Ollama' : 'Gemini 3 Flash'}
+                        <SettingsIcon size={12} /> Provider: {aiProvider === 'ollama' ? 'Ollama' : aiProvider === 'openrouter' ? 'OpenRouter' : 'Gemini 3 Flash'}
                     </button>
 
                     {showSettings && (
@@ -137,16 +148,22 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Select Provider</label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-3 gap-1">
                                         <button 
                                             onClick={() => setAiProvider('ollama')}
-                                            className={`px-3 py-2 text-xs font-medium rounded-md border ${aiProvider === 'ollama' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                                            className={`px-1 py-2 text-[10px] font-medium rounded-md border ${aiProvider === 'ollama' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
                                         >
-                                            Ollama Cloud
+                                            Ollama
+                                        </button>
+                                        <button 
+                                            onClick={() => setAiProvider('openrouter')}
+                                            className={`px-1 py-2 text-[10px] font-medium rounded-md border ${aiProvider === 'openrouter' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                                        >
+                                            OpenRouter
                                         </button>
                                         <button 
                                             onClick={() => setAiProvider('gemini')}
-                                            className={`px-3 py-2 text-xs font-medium rounded-md border ${aiProvider === 'gemini' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                                            className={`px-1 py-2 text-[10px] font-medium rounded-md border ${aiProvider === 'gemini' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'}`}
                                         >
                                             Gemini
                                         </button>
@@ -194,6 +211,42 @@ const AiChatPanel: React.FC<AiChatPanelProps> = ({ currentUser, receivedGoods, f
                                         <button 
                                             onClick={handleTestConnection}
                                             className="w-full bg-indigo-200 hover:bg-indigo-300 text-indigo-800 text-xs py-1.5 rounded transition-colors"
+                                        >
+                                            Test Connection
+                                        </button>
+                                        {testStatus && (
+                                            <div className={`text-xs p-2 rounded ${testStatus.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {testStatus.message}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {aiProvider === 'openrouter' && (
+                                    <div className="bg-emerald-50 p-3 rounded-md space-y-3 border border-emerald-100">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-emerald-800 mb-1">Model Name</label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full p-2 text-xs border border-emerald-200 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
+                                                placeholder="nvidia/nemotron-nano-12b-v2-vl:free"
+                                                value={openRouterModel}
+                                                onChange={(e) => setOpenRouterModel(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-emerald-800 mb-1">API Key</label>
+                                            <input 
+                                                type="password" 
+                                                className="w-full p-2 text-xs border border-emerald-200 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
+                                                placeholder="Enter API Key"
+                                                value={openRouterKey}
+                                                onChange={(e) => setOpenRouterKey(e.target.value)}
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleTestConnection}
+                                            className="w-full bg-emerald-200 hover:bg-emerald-300 text-emerald-800 text-xs py-1.5 rounded transition-colors"
                                         >
                                             Test Connection
                                         </button>

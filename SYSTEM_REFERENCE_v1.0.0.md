@@ -18,6 +18,7 @@ A unified Operating System for a Battery Assembly Plant. It manages the full lif
 *   **AI/Inference:**
     *   **Cloud:** Google Gemini 3 Flash (via `@google/genai`).
     *   **Local:** Ollama (Qwen2-VL) via Localhost Proxy.
+    *   **OpenRouter:** OpenRouter Vision Models (Default: `nvidia/nemotron-nano-12b-v2-vl:free`).
 *   **State Strategy:** Optimistic UI with `useSupabase` custom hook for synchronization.
 *   **Persistence:** `localStorage` for user session and volatile AI settings; PostgreSQL for business data.
 
