@@ -602,13 +602,27 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
             const newPrefix = `${typeTag}/DC/${fyStr}/`;
             
-            // Query for the count in this specific series (irrespective of company)
-            const { count } = await supabase
+            // Query for all invoices in this series to find the maximum sequence number
+            const { data } = await supabase
                 .from('invoices')
-                .select('*', { count: 'exact', head: true })
+                .select('invoice_metadata')
                 .ilike('invoice_metadata->>invoice_number', `${newPrefix}%`);
 
-            const nextSeq = String((count || 0) + 1).padStart(3, '0');
+            let maxSeq = 0;
+            if (data && data.length > 0) {
+                data.forEach(row => {
+                    const invNum = row.invoice_metadata?.invoice_number;
+                    if (invNum && invNum.startsWith(newPrefix)) {
+                        const seqStr = invNum.substring(newPrefix.length);
+                        const seq = parseInt(seqStr, 10);
+                        if (!isNaN(seq) && seq > maxSeq) {
+                            maxSeq = seq;
+                        }
+                    }
+                });
+            }
+
+            const nextSeq = String(maxSeq + 1).padStart(3, '0');
             const newNumber = `${newPrefix}${nextSeq}`;
 
             setDoc(prev => ({
@@ -632,13 +646,29 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         const prefixBase = docType === 'quotation' ? 'Q' : docType === 'proforma' ? 'P' : 'DC';
         const fyPrefix = `${prefixBase}.${code}.${fyStr}.`;
 
-        // Fetch count for THIS financial year to reset numbering
-        const { count } = await supabase
+        // Fetch all invoices for THIS financial year to find the maximum sequence
+        const { data } = await supabase
             .from('invoices')
-            .select('*', { count: 'exact', head: true })
+            .select('invoice_metadata')
             .ilike('invoice_metadata->>invoice_number', `${fyPrefix}%`);
 
-        const sequence = String((count || 0) + 1).padStart(3, '0');
+        let maxSeqOld = 0;
+        if (data && data.length > 0) {
+            data.forEach(row => {
+                const invNum = row.invoice_metadata?.invoice_number;
+                if (invNum && invNum.startsWith(`${fyPrefix}${mm}.`)) {
+                    const seqStr = invNum.split('.').pop();
+                    if (seqStr) {
+                        const seq = parseInt(seqStr, 10);
+                        if (!isNaN(seq) && seq > maxSeqOld) {
+                            maxSeqOld = seq;
+                        }
+                    }
+                }
+            });
+        }
+
+        const sequence = String(maxSeqOld + 1).padStart(3, '0');
         const newNumber = `${fyPrefix}${mm}.${sequence}`;
 
         setDoc(prev => ({

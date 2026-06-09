@@ -100,7 +100,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
 
           <nav className="flex space-x-1 overflow-x-auto scrollbar-hide md:flex-grow md:justify-center pt-1 md:pt-0">
             <TopNavButton isActive={currentCategory === 'operations'} onClick={() => setView('received')} icon={<CubeIcon className="h-4 w-4" />}>Operations</TopNavButton>
-            <TopNavButton isActive={currentCategory === 'finance'} onClick={() => setView('finance_dashboard')} icon={<FileTextIcon className="h-4 w-4" />}>Finance</TopNavButton>
+            <TopNavButton isActive={currentCategory === 'finance'} onClick={() => setView(userRole === 'admin' ? 'finance_dashboard' : 'finance_maker')} icon={<FileTextIcon className="h-4 w-4" />}>Finance</TopNavButton>
             <TopNavButton isActive={currentCategory === 'analytics'} onClick={() => setView('reports')} icon={<SearchIcon className="h-4 w-4" />}>Analytics</TopNavButton>
             <TopNavButton isActive={currentCategory === 'admin'} onClick={() => setView('companies')} icon={<BuildingIcon className="h-4 w-4" />}>Admin</TopNavButton>
 
@@ -113,7 +113,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
           <div className="absolute top-4 right-4 md:static flex items-center md:ml-6">
             <div className="text-right mr-3 hidden md:block">
               <div className="text-xs font-bold text-white">{username}</div>
-              <div className="text-[9px] uppercase font-black text-[#8EBF45] bg-white/10 px-1.5 py-0.5 rounded mt-0.5">{userRole}</div>
+              <div className="text-[9px] uppercase font-black text-[#8EBF45] bg-white/10 px-1.5 py-0.5 rounded mt-0.5">{userRole === 'admin' ? 'Director Admin' : 'General Employee'}</div>
             </div>
             <button onClick={onLogout} className="ml-3 text-slate-500 hover:text-[#8EBF45] transition-colors p-1.5 hover:bg-white/5 rounded-full" title="Logout">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -145,12 +145,20 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
             )}
             {currentCategory === 'finance' && (
               <>
-                <SubNavButton isActive={currentView === 'finance_dashboard'} onClick={() => setView('finance_dashboard')}>Dashboard</SubNavButton>
-                <SubNavButton isActive={currentView === 'finance_upload'} onClick={() => setView('finance_upload')}>Scan Invoice</SubNavButton>
+                {userRole === 'admin' && (
+                  <>
+                    <SubNavButton isActive={currentView === 'finance_dashboard'} onClick={() => setView('finance_dashboard')}>Dashboard</SubNavButton>
+                    <SubNavButton isActive={currentView === 'finance_upload'} onClick={() => setView('finance_upload')}>Scan Invoice</SubNavButton>
+                  </>
+                )}
                 <SubNavButton isActive={currentView === 'finance_maker'} onClick={() => setView('finance_maker')}>Invoice Maker</SubNavButton>
-                <SubNavButton isActive={currentView === 'finance_gst'} onClick={() => setView('finance_gst')}>GST Returns</SubNavButton>
-                <SubNavButton isActive={currentView === 'finance_expenses'} onClick={() => setView('finance_expenses')}>Expenses</SubNavButton>
-                <SubNavButton isActive={currentView === 'finance_prices'} onClick={() => setView('finance_prices')}>Prices</SubNavButton>
+                {userRole === 'admin' && (
+                  <>
+                    <SubNavButton isActive={currentView === 'finance_gst'} onClick={() => setView('finance_gst')}>GST Returns</SubNavButton>
+                    <SubNavButton isActive={currentView === 'finance_expenses'} onClick={() => setView('finance_expenses')}>Expenses</SubNavButton>
+                    <SubNavButton isActive={currentView === 'finance_prices'} onClick={() => setView('finance_prices')}>Prices</SubNavButton>
+                  </>
+                )}
               </>
             )}
             {currentCategory === 'analytics' && (

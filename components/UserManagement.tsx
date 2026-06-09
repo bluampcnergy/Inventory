@@ -70,7 +70,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
                 <td className="p-4">{user.username}</td>
                 <td className="p-4">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-[#8EBF45]/20 text-[#658C3E]' : 'bg-gray-100 text-gray-800'}`}>
-                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                        {user.role === 'admin' ? 'Director Admin' : 'General Employee'}
                     </span>
                 </td>
                 <td className="p-4 text-right">
@@ -123,7 +123,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
               required 
             />
           </div>
-           <p className="text-sm text-gray-500">New users will be created with the 'User' role.</p>
+           <p className="text-sm text-gray-500">New users will be created with the 'General Employee' role.</p>
           <div className="flex justify-end pt-4">
             <button type="submit" className="bg-[#8EBF45] text-[#0D0D0D] px-4 py-2 rounded-lg hover:bg-[#658C3E] hover:text-white font-bold uppercase tracking-wide text-xs">Create User</button>
           </div>

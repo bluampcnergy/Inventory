@@ -14,7 +14,6 @@ import CompanyProfiles from './components/CompanyProfiles';
 import SuppliesRecord from './components/SuppliesRecord';
 import InvoiceModule from './components/invoices/InvoiceModule'; 
 import AiChatPanel from './components/invoices/AiChatPanel';
-import FinanceLock from './components/FinanceLock';
 import StorageManager from './components/RackSearch'; 
 import PublicStorageViewer from './components/PublicStorageViewer'; // New Import
 import Footer from './components/Footer';
@@ -54,7 +53,6 @@ const App: React.FC = () => {
 
   // State for transferring data from Reports to Invoice Maker
   const [invoiceDraft, setInvoiceDraft] = useState<ExtractedInvoice | null>(null);
-  const [isFinanceUnlocked, setIsFinanceUnlocked] = useState(false);
 
   // State for transferring data from Testing to WIP (Start Production)
   const [productionDraft, setProductionDraft] = useState<{ receivedGoodId: string; serials: string[] } | null>(null);
@@ -163,10 +161,10 @@ const App: React.FC = () => {
   const renderView = useCallback(() => {
     // Handle Finance Sub-routes
     if (view.startsWith('finance_')) {
-        if (!isFinanceUnlocked) {
-            return <FinanceLock onUnlock={() => setIsFinanceUnlocked(true)} />;
-        }
         const tab = view.replace('finance_', '') as any;
+        if (currentUser?.role !== 'admin' && tab !== 'maker') {
+            return <div className="text-center p-8 text-red-600 font-semibold">Access Denied: Director Admins Only</div>;
+        }
         return <InvoiceModule 
             currentUser={currentUser} 
             companyProfiles={companyProfiles}
@@ -313,7 +311,7 @@ const App: React.FC = () => {
       default:
         return null;
     }
-  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords, isFinanceUnlocked]);
+  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords]);
 
   // --- COMPANY PROFILES IFRAME ROUTE ---
   if (mode === 'add_company') {
