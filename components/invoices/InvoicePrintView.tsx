@@ -6,15 +6,20 @@ import { ExtractedInvoice, InvoiceItem, InvoiceTemplate } from '../../types';
 import { getTaxMode, safeRender, amountToWords, getCurrencySymbol } from '../../utils/invoiceUtils';
 import { Printer, Download, X } from './Icons';
 import { QRCodeSVG } from 'qrcode.react';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 interface InvoicePrintViewProps {
     invoice: ExtractedInvoice;
     onClose: () => void;
+    autoMailTarget?: string | null;
+    onMailSent?: () => void;
+    onError?: (err: Error) => void;
 }
 
 const ITEMS_PER_PAGE = 10;
 
-const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose }) => {
+const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, autoMailTarget, onMailSent, onError }) => {
     const [logo, setLogo] = useState<string | null>(null);
     const [stamp, setStamp] = useState<string | null>(null);
     const [signature, setSignature] = useState<string | null>(null);
@@ -90,6 +95,73 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
         }
     }, [invoice]);
 
+    useEffect(() => {
+        if (autoMailTarget && printRef.current) {
+            // Slight delay to ensure images/fonts are loaded
+            setTimeout(() => {
+                handleAutoMail();
+            }, 1000);
+        }
+    }, [autoMailTarget]);
+
+    const handleAutoMail = async () => {
+        try {
+            const element = printRef.current?.querySelector('.invoice-print-container');
+            if (!element) throw new Error("Could not find print container");
+
+            const opt = {
+                margin: 0,
+                filename: 'invoice.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: 'css', elements: '.invoice-print-page' }
+            };
+
+            const pdfBase64DataUri = await html2pdf().set(opt).from(element).outputPdf('datauristring');
+            
+            const htmlContent = `
+                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; padding: 20px;">
+                    <h2 style="color: #658C3E;">Datlion Cnergy</h2>
+                    <p>Hello,</p>
+                    <p>Please find the details and attached PDF for your recent document below:</p>
+                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                        <p style="margin: 5px 0;"><strong>Document Type:</strong> ${(invoice.document_type || '').replace(/_/g, ' ').toUpperCase()}</p>
+                        <p style="margin: 5px 0;"><strong>Document Number:</strong> ${invoice.invoice_metadata?.invoice_number || 'N/A'}</p>
+                        <p style="margin: 5px 0;"><strong>Date:</strong> ${invoice.invoice_metadata?.invoice_date || 'N/A'}</p>
+                        <p style="margin: 5px 0; font-size: 1.1em;"><strong>Total Amount:</strong> ₹${(invoice.totals?.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <p>If you have any questions, please reply to this email.</p>
+                    <p style="color: #666; font-size: 0.9em;">Best regards,<br/>Datlion Cnergy Team</p>
+                </div>
+            `;
+
+            const response = await fetch('/api/send-mail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: autoMailTarget,
+                    subject: \`Document \${invoice.invoice_metadata?.invoice_number || ''} from Datlion Cnergy\`,
+                    html: htmlContent,
+                    attachmentBase64: pdfBase64DataUri,
+                    attachmentName: \`\${invoice.invoice_metadata?.invoice_number || 'document'}.pdf\`
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || data.message || "Failed to send email");
+            }
+
+            if (onMailSent) onMailSent();
+            onClose();
+        } catch (err: any) {
+            console.error("Auto mail error:", err);
+            if (onError) onError(err);
+            onClose();
+        }
+    };
+
     const doc = invoice;
     const docType = doc.document_type || 'invoice';
     const customTitle = docType === 'generated_po' ? 'PURCHASE ORDER' : docType === 'generated_quotation' ? 'QUOTATION' : docType === 'generated_proforma_invoice' ? 'PROFORMA INVOICE' : 'INVOICE';
@@ -123,7 +195,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
     };
 
     const overlayContent = (
-        <div id="invoice-print-overlay" className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex flex-col h-full">
+        <div id="invoice-print-overlay" className={\`fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex flex-col h-full \${autoMailTarget ? 'opacity-0 pointer-events-none' : 'animate-fade-in'}\`}>
             <style>{`
                 @media print {
                     body > *:not(#invoice-print-overlay) { display: none !important; }
@@ -166,7 +238,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose })
 
                 {/* Scrollable preview */}
                 <div className="print-scroll-area flex-1 overflow-y-auto bg-slate-200 p-8" ref={printRef}>
-                    <div className={`mx-auto ${config.font}`}>
+                    <div className={`mx-auto ${config.font} invoice-print-container`}>
                         {paginatedPages.map((pageItems, pageIdx) => (
                             <div className="invoice-print-page bg-white shadow-xl mx-auto mb-8 w-[210mm] min-h-[297mm] p-8 flex flex-col relative" key={pageIdx}>
                                 {/* HEADER */}

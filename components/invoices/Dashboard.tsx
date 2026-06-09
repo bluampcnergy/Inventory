@@ -199,6 +199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
     const [sourceInvoice, setSourceInvoice] = useState<ExtractedInvoice | null>(null);
     const [printInvoice, setPrintInvoice] = useState<ExtractedInvoice | null>(null);
     const [sendingMailId, setSendingMailId] = useState<string | null>(null);
+    const [autoMailInvoice, setAutoMailInvoice] = useState<{inv: ExtractedInvoice, targetEmail: string} | null>(null);
 
     const handleSendMail = async (inv: ExtractedInvoice) => {
         // Handle POs where the other party might be in supplier_details
@@ -212,38 +213,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
         if (!confirmSend) return;
 
         setSendingMailId(inv.id as string);
+        setAutoMailInvoice({ inv, targetEmail });
+    };
+
+    const handleMailSentSuccess = async (inv: ExtractedInvoice) => {
         try {
-            const htmlContent = `
-                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; padding: 20px;">
-                    <h2 style="color: #658C3E;">Datlion Cnergy</h2>
-                    <p>Hello,</p>
-                    <p>Please find the details for your recent document below:</p>
-                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                        <p style="margin: 5px 0;"><strong>Document Type:</strong> ${inv.document_type.replace(/_/g, ' ').toUpperCase()}</p>
-                        <p style="margin: 5px 0;"><strong>Document Number:</strong> ${inv.invoice_metadata?.invoice_number || 'N/A'}</p>
-                        <p style="margin: 5px 0;"><strong>Date:</strong> ${inv.invoice_metadata?.invoice_date || 'N/A'}</p>
-                        <p style="margin: 5px 0; font-size: 1.1em;"><strong>Total Amount:</strong> ₹${(inv.totals?.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <p>If you have any questions, please reply to this email.</p>
-                    <p style="color: #666; font-size: 0.9em;">Best regards,<br/>Datlion Cnergy Team</p>
-                </div>
-            `;
-
-            const response = await fetch('/api/send-mail', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    to: targetEmail,
-                    subject: `Document ${inv.invoice_metadata?.invoice_number || ''} from Datlion Cnergy`,
-                    html: htmlContent
-                })
-            });
-
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || data.message || "Failed to send email");
-            }
-
             const updatedMetadata = { ...inv.invoice_metadata, mail_sent: true };
             const { error: updateError } = await supabase
                 .from('invoices')
@@ -253,14 +227,19 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
             if (updateError) throw updateError;
 
             setInvoices(prev => prev.map(item => item.id === inv.id ? { ...item, invoice_metadata: updatedMetadata } : item));
-            
             alert("Mail sent successfully!");
         } catch (err: any) {
-            console.error("Mail send error:", err);
-            alert("Error sending mail: " + err.message);
+            console.error("Mail update error:", err);
         } finally {
             setSendingMailId(null);
+            setAutoMailInvoice(null);
         }
+    };
+
+    const handleMailError = (err: Error) => {
+        alert("Error sending mail: " + err.message);
+        setSendingMailId(null);
+        setAutoMailInvoice(null);
     };
 
     const fetchInvoices = async () => {
@@ -673,6 +652,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
             {/* Invoice Print Preview Overlay */}
             {printInvoice && (
                 <InvoicePrintView invoice={printInvoice} onClose={() => setPrintInvoice(null)} />
+            )}
+            
+            {autoMailInvoice && (
+                <InvoicePrintView 
+                    invoice={autoMailInvoice.inv} 
+                    onClose={() => {}} 
+                    autoMailTarget={autoMailInvoice.targetEmail}
+                    onMailSent={() => handleMailSentSuccess(autoMailInvoice.inv)}
+                    onError={handleMailError}
+                />
             )}
         </div>
     );
