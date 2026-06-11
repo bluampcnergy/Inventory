@@ -239,15 +239,18 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, a
                 {/* Scrollable preview */}
                 <div className="print-scroll-area flex-1 overflow-y-auto bg-slate-200 p-8" ref={printRef}>
                     <div className={`mx-auto ${config.font} invoice-print-container`}>
-                        {paginatedPages.map((pageItems, pageIdx) => (
-                            <div className="invoice-print-page bg-white shadow-xl mx-auto mb-8 w-[210mm] min-h-[297mm] p-8 flex flex-col relative" key={pageIdx}>
-                                {/* HEADER */}
-                                <div className="flex justify-between items-start mb-3 border-b pb-3">
-                                    <div className="flex items-start gap-4 flex-1">
-                                        {logo ? <img src={logo} alt="Logo" className="w-auto object-contain" style={{ height: config.logoSize || 64 }} /> : <div className="w-16 h-16 bg-slate-100 rounded flex items-center justify-center text-slate-300 text-xs">Logo</div>}
-                                        <div className="flex-1">
-                                            <h2 className="font-bold text-xl uppercase tracking-wide text-slate-900 leading-none mb-1">{safeRender(doc.issuer_details?.name)}</h2>
-                                            <p className="text-xs text-slate-500 whitespace-pre-line max-w-sm leading-tight mb-1">{safeRender(doc.issuer_details?.address)}</p>
+                        {['ORIGINAL FOR RECIPIENT', 'DUPLICATE FOR TRANSPORTER'].map((copyLabel, copyIdx) => (
+                            <React.Fragment key={copyIdx}>
+                                {paginatedPages.map((pageItems, pageIdx) => (
+                                    <div className="invoice-print-page bg-white shadow-xl mx-auto mb-8 w-[210mm] min-h-[297mm] p-8 flex flex-col relative" key={`${copyIdx}-${pageIdx}`}>
+                                        <div className="absolute top-4 right-8 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{copyLabel}</div>
+                                        {/* HEADER */}
+                                        <div className="flex justify-between items-start mt-4 mb-3 border-b pb-3">
+                                            <div className="flex items-start gap-4 flex-1">
+                                                {logo ? <img src={logo} alt="Logo" className="w-auto object-contain" style={{ height: config.logoSize || 64 }} /> : <div className="w-16 h-16 bg-slate-100 rounded flex items-center justify-center text-slate-300 text-xs">Logo</div>}
+                                                <div className="flex-1">
+                                                    <h2 className="font-bold text-xl uppercase tracking-wide text-slate-900 leading-none mb-1">{safeRender(doc.issuer_details?.name)}</h2>
+                                                    <p className="text-xs text-slate-500 whitespace-pre-line max-w-sm leading-tight mb-1">{safeRender(doc.issuer_details?.address)}</p>
                                             <div className="text-[10px] text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
                                                 {doc.issuer_details?.gstin && <span><strong>GSTIN:</strong> {doc.issuer_details.gstin}</span>}
                                                 {doc.issuer_details?.pan && <span><strong>PAN:</strong> {doc.issuer_details.pan}</span>}
@@ -450,6 +453,8 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, a
                                 {/* FOOTER */}
                                 <div className="pt-1 text-center text-[9px] text-slate-400">{safeRender(config.footerText)}</div>
                             </div>
+                                ))}
+                            </React.Fragment>
                         ))}
                     </div>
                 </div>

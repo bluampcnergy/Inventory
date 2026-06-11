@@ -1404,12 +1404,15 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
                     {/* === PRINT-ONLY PAGINATED VIEW === */}
                     <div className="print-only" style={{ display: 'none' }}>
-                        {paginatedPages.map((pageItems, pageIdx) => {
-                            const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
-                            return (
-                                <div className="invoice-page" key={pageIdx}>
-                                    {/* ---- PAGE HEADER ---- */}
-                                    <div className="flex justify-between items-start mb-3 border-b pb-3">
+                        {['ORIGINAL FOR RECIPIENT', 'DUPLICATE FOR TRANSPORTER'].map((copyLabel, copyIdx) => (
+                            <React.Fragment key={copyIdx}>
+                                {paginatedPages.map((pageItems, pageIdx) => {
+                                    const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
+                                    return (
+                                        <div className="invoice-page relative" key={`${copyIdx}-${pageIdx}`}>
+                                            <div className="absolute top-0 right-0 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{copyLabel}</div>
+                                            {/* ---- PAGE HEADER ---- */}
+                                            <div className="flex justify-between items-start mt-4 mb-3 border-b pb-3">
                                         <div className="flex items-start gap-4 flex-1">
                                             {logo ? <img src={logo} alt="Logo" className="w-auto object-contain" style={{ height: config.logoSize || 64 }} /> : <div className="w-16 h-16 bg-slate-100 rounded flex items-center justify-center text-slate-300 text-xs">Logo</div>}
                                             <div className="flex-1">
@@ -1633,6 +1636,8 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                                 </div>
                             );
                         })}
+                            </React.Fragment>
+                        ))}
                     </div>{/* end print-only */}
                 </div>
             </div>
