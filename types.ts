@@ -130,6 +130,7 @@ export interface FinishedGood {
   unitMetadata?: { [unitId: string]: UnitMetadata };
   // Map of Unit ID -> { ReceivedGood ID -> [Serials Used] }
   unitComponentMap?: { [unitId: string]: { [receivedGoodId: string]: string[] } };
+  isDTF?: boolean;
 }
 
 export interface RepairItem {

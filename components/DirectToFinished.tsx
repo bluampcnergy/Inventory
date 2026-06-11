@@ -58,8 +58,8 @@ const DirectToFinished: React.FC<DirectToFinishedProps> = ({
         }
 
         // 1. Ensure Pseudo-Recipe exists
-        const pseudoRecipeName = `DTF - ${selectedGood.name}`;
-        let recipe = recipes.find(r => r.name === pseudoRecipeName);
+        const pseudoRecipeName = selectedGood.name;
+        let recipe = recipes.find(r => r.name === pseudoRecipeName && r.components.length === 1 && r.components[0].receivedGoodId === selectedGood.id);
         
         if (!recipe) {
             recipe = {
@@ -83,7 +83,8 @@ const DirectToFinished: React.FC<DirectToFinishedProps> = ({
             inRepairUnitIds: [], 
             repairedUnitIds: [], 
             unitDeliveries: {}, 
-            unitMetadata: {}
+            unitMetadata: {},
+            isDTF: true
         };
 
         // If tracked, generate unit map

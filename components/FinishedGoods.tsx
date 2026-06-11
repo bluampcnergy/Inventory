@@ -31,6 +31,8 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isSpecModalOpen, setIsSpecModalOpen] = useState(false);
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+    const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+    const [invoiceSelection, setInvoiceSelection] = useState<Record<string, string[]>>({});
 
     const [selectedGood, setSelectedGood] = useState<FinishedGood | null>(null);
     const [selectedUnitId, setSelectedUnitId] = useState<string>('');
@@ -82,15 +84,41 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
         if (selectedBatches.size === 0) return alert("Select batches to create an Invoice.");
 
         const batchesToInvoice = finishedGoods.filter(fg => selectedBatches.has(fg.id));
+        const initialSelection: Record<string, string[]> = {};
+        let needsSelection = false;
+
+        batchesToInvoice.forEach(fg => {
+            const unitIds = generateUnitIds(fg, finishedGoods, recipes);
+            const availableUnits = unitIds.filter(id => !fg.dismantledUnitIds?.includes(id) && !fg.unitDeliveries?.[id]);
+            initialSelection[fg.id] = availableUnits;
+            
+            if (availableUnits.length > 1) {
+                needsSelection = true;
+            }
+        });
+
+        if (needsSelection) {
+            setInvoiceSelection(initialSelection);
+            setIsInvoiceModalOpen(true);
+        } else {
+            generateInvoiceDraft(initialSelection);
+        }
+    };
+
+    const generateInvoiceDraft = (selection: Record<string, string[]>) => {
+        const batchesToInvoice = finishedGoods.filter(fg => selectedBatches.has(fg.id));
 
         const draftItems = batchesToInvoice.map(fg => {
-            // Calculate ACTUAL available quantity (excluding dismantled AND delivered)
-            const dismantledCount = fg.dismantledUnitIds?.length || 0;
-            const deliveredCount = Object.keys(fg.unitDeliveries || {}).length;
-            const sellableQty = Math.max(0, fg.quantity - dismantledCount - deliveredCount);
+            const selectedUnits = selection[fg.id] || [];
+            const sellableQty = selectedUnits.length;
+            
+            let description = getRecipeName(fg.recipeId);
+            if (selectedUnits.length > 0) {
+                description += `\nS/N: ${selectedUnits.join(', ')}`;
+            }
 
             return {
-                description: getRecipeName(fg.recipeId),
+                description: description,
                 hsn_sac: '',
                 quantity: sellableQty,
                 unit_price: 0,
@@ -98,7 +126,11 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                 cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0, igst_rate: 18, igst_amount: 0,
                 total_value: 0
             };
-        });
+        }).filter(item => item.quantity > 0);
+
+        if (draftItems.length === 0) {
+            return alert("No available items selected to invoice.");
+        }
 
         const draft: ExtractedInvoice = {
             ...EMPTY_INVOICE,
@@ -112,6 +144,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             setInvoiceDraft(draft);
             setView('finance_maker');
         }
+        setIsInvoiceModalOpen(false);
     };
 
     const handleBulkPrint = () => {
@@ -495,14 +528,17 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                                 const uniqueRecipients = Array.from(new Set(Object.values(good.unitDeliveries || {})));
 
                                 return (
-                                    <tr key={good.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-[#8EBF45]/20' : ''}`}>
+                                    <tr key={good.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-[#8EBF45]/20' : (good.isDTF ? 'bg-indigo-50/50 border-l-4 border-indigo-400' : '')}`}>
                                         <td className="p-4">
                                             <input type="checkbox" checked={isSelected} onChange={() => handleToggleSelect(good.id)} className="w-5 h-5 text-[#658C3E] rounded border-gray-300 focus:ring-[#8EBF45]" />
                                         </td>
                                         <td className="p-4 text-sm text-gray-500 whitespace-nowrap">
                                             {new Date(good.timestamp).toLocaleDateString()}
                                         </td>
-                                        <td className="p-4 font-bold text-gray-900">{getRecipeName(good.recipeId)}</td>
+                                        <td className="p-4 font-bold text-gray-900">
+                                            {getRecipeName(good.recipeId)}
+                                            {good.isDTF && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">DTF</span>}
+                                        </td>
                                         <td className="p-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="font-bold text-lg text-[#658C3E]">{availableQuantity}</span>
@@ -672,7 +708,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                                             <p className="font-bold text-slate-400 uppercase tracking-tight">Component Serials</p>
                                             {unitSerials.map((us, idx) => (
                                                 <div key={idx}>
-                                                    <span className="font-semibold text-slate-700">{us.goodName}{us.makeModel ? ` (${us.makeModel})` : ''}:</span>
+                                                    <span className="font-semibold text-slate-700">{us.goodName}:</span>
                                                     <span className="text-slate-600 ml-1 italic">{us.serials.join(', ') || 'None'}</span>
                                                 </div>
                                             ))}
@@ -791,6 +827,65 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                     </div>
                 </Modal>
             )}
+            {/* Invoice Serial Selection Modal */}
+            <Modal isOpen={isInvoiceModalOpen} onClose={() => setIsInvoiceModalOpen(false)} title="Select Serials for Invoice" size="md">
+                <div className="space-y-6">
+                    <p className="text-sm text-gray-500">Please select the specific serial numbers (Unit IDs) you wish to include in this invoice.</p>
+                    
+                    <div className="max-h-[60vh] overflow-y-auto space-y-4">
+                        {finishedGoods.filter(fg => selectedBatches.has(fg.id)).map(fg => {
+                            const unitIds = generateUnitIds(fg, finishedGoods, recipes);
+                            const availableUnits = unitIds.filter(id => !fg.dismantledUnitIds?.includes(id) && !fg.unitDeliveries?.[id]);
+                            
+                            if (availableUnits.length === 0) return null;
+
+                            return (
+                                <div key={fg.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                    <h4 className="font-bold text-gray-800 mb-2">{getRecipeName(fg.recipeId)}</h4>
+                                    <div className="space-y-2">
+                                        {availableUnits.map(unitId => (
+                                            <label key={unitId} className="flex items-center gap-3 p-2 hover:bg-white rounded border border-transparent hover:border-gray-200 cursor-pointer transition-colors">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={(invoiceSelection[fg.id] || []).includes(unitId)}
+                                                    onChange={(e) => {
+                                                        setInvoiceSelection(prev => {
+                                                            const current = prev[fg.id] || [];
+                                                            return {
+                                                                ...prev,
+                                                                [fg.id]: e.target.checked 
+                                                                    ? [...current, unitId] 
+                                                                    : current.filter(id => id !== unitId)
+                                                            };
+                                                        });
+                                                    }}
+                                                    className="w-4 h-4 text-[#8EBF45] rounded border-gray-300 focus:ring-[#8EBF45]"
+                                                />
+                                                <span className="font-mono text-sm text-gray-700">{unitId}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button 
+                            onClick={() => setIsInvoiceModalOpen(false)}
+                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={() => generateInvoiceDraft(invoiceSelection)}
+                            className="px-6 py-2 bg-[#8EBF45] text-[#0D0D0D] font-bold rounded-lg hover:bg-[#658C3E] hover:text-white transition-colors"
+                        >
+                            Confirm & Generate Invoice
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };
