@@ -3,6 +3,7 @@ export type View =
   | 'received'
   | 'testing'
   | 'wip'
+  | 'dtf'
   | 'finished'
   | 'storage'
   | 'reports'

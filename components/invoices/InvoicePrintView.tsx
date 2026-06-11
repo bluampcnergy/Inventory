@@ -141,10 +141,10 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, a
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     to: autoMailTarget,
-                    subject: \`Document \${invoice.invoice_metadata?.invoice_number || ''} from Datlion Cnergy\`,
+                    subject: `Document ${invoice.invoice_metadata?.invoice_number || ''} from Datlion Cnergy`,
                     html: htmlContent,
                     attachmentBase64: pdfBase64DataUri,
-                    attachmentName: \`\${invoice.invoice_metadata?.invoice_number || 'document'}.pdf\`
+                    attachmentName: `${invoice.invoice_metadata?.invoice_number || 'document'}.pdf`
                 })
             });
 
@@ -195,7 +195,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, a
     };
 
     const overlayContent = (
-        <div id="invoice-print-overlay" className={\`fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex flex-col h-full \${autoMailTarget ? 'opacity-0 pointer-events-none' : 'animate-fade-in'}\`}>
+        <div id="invoice-print-overlay" className={`fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex flex-col h-full ${autoMailTarget ? 'opacity-0 pointer-events-none' : 'animate-fade-in'}`}>
             <style>{`
                 @media print {
                     body > *:not(#invoice-print-overlay) { display: none !important; }

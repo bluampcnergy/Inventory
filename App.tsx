@@ -4,6 +4,7 @@ import Header from './components/Header';
 import ReceivedGoods from './components/ReceivedGoods';
 import WorkInProgress from './components/WorkInProgress';
 import FinishedGoods from './components/FinishedGoods';
+import DirectToFinished from './components/DirectToFinished';
 import Testing from './components/Testing';
 import Reports from './components/Reports';
 import Auth from './components/Auth';
@@ -226,6 +227,17 @@ const App: React.FC = () => {
           companyProfiles={companyProfiles}
           productionDraft={productionDraft}
           setProductionDraft={setProductionDraft}
+        />;
+      case 'dtf':
+        return <DirectToFinished
+          receivedGoods={receivedGoods}
+          setReceivedGoods={setReceivedGoods}
+          finishedGoods={finishedGoods}
+          setFinishedGoods={setFinishedGoods}
+          recipes={recipes}
+          setRecipes={setRecipes}
+          addLogEntry={addLogEntry}
+          currentUser={currentUser}
         />;
       case 'finished':
         return <FinishedGoods 

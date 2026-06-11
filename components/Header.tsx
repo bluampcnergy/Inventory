@@ -66,7 +66,7 @@ const ExternalNavButton: React.FC<{ href: string; children: React.ReactNode; ico
 const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRole, onLogout }) => {
 
   const categories = useMemo(() => ({
-    operations: ['received', 'testing', 'wip', 'finished', 'storage', 'supplies'] as View[],
+    operations: ['received', 'testing', 'wip', 'dtf', 'finished', 'storage', 'supplies'] as View[],
     finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_prices', 'finance_maker'] as View[],
     analytics: ['ai_assistant', 'reports', 'master', 'log'] as View[],
     admin: ['companies', 'users'] as View[],
@@ -135,6 +135,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 <SubNavButton isActive={currentView === 'testing'} onClick={() => setView('testing')}>Testing</SubNavButton>
                 <div className="text-[#A8BF75]">/</div>
                 <SubNavButton isActive={currentView === 'wip'} onClick={() => setView('wip')}>Work in Progress</SubNavButton>
+                <div className="text-[#A8BF75]">/</div>
+                <SubNavButton isActive={currentView === 'dtf'} onClick={() => setView('dtf')}>Direct to Finished</SubNavButton>
                 <div className="text-[#A8BF75]">/</div>
                 <SubNavButton isActive={currentView === 'finished'} onClick={() => setView('finished')}>Finished Goods</SubNavButton>
                 <div className="w-px h-6 bg-[#A8BF75]/40 mx-2"></div>
