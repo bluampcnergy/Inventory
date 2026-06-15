@@ -107,12 +107,30 @@ export interface WIPItem {
 }
 
 export interface UnitMetadata {
+  itemType?: 'Battery' | 'Solar Panel' | 'Inverter' | 'Other';
+  weight?: number;
+  
+  // Battery Specific
   chemistry?: 'LFP' | 'NMC';
   balancing?: string;
   voltage?: number;
   capacity?: number;
   resistance?: number;
-  weight?: number;
+
+  // Solar Panel Specific
+  peakPower?: number;
+  vmp?: number;
+  imp?: number;
+  dcrType?: 'DCR' | 'Non DCR';
+
+  // Inverter Specific
+  ratedPower?: number;
+  inputVoltage?: number;
+  outputVoltage?: number;
+  inverterType?: 'Solar PWM' | 'Non Solar' | 'Solar MPPT';
+
+  // Other Specific
+  description?: string;
 }
 
 export interface FinishedGood {

@@ -42,7 +42,7 @@ const DirectToFinished: React.FC<DirectToFinishedProps> = ({
     };
 
     const handleSerialSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const serials = Array.from(e.target.selectedOptions).map(o => o.value);
+        const serials = Array.from(e.target.selectedOptions, (o: HTMLOptionElement) => o.value);
         setSelectedSerials(serials);
     };
 

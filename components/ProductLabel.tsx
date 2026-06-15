@@ -4,16 +4,34 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Printer, Download } from './invoices/Icons';
 
 interface LabelData {
+    itemType?: 'Battery' | 'Solar Panel' | 'Inverter' | 'Other';
     productName: string;
-    voltage: string;
-    capacity: string;
     mfgDate: string;
-    balancing: string;
-    energy: string;
     weight: string;
     productId: string;
     qrCodeUrl: string;
     email?: string;
+    
+    // Battery
+    voltage?: string;
+    capacity?: string;
+    balancing?: string;
+    energy?: string;
+
+    // Solar Panel
+    peakPower?: string;
+    vmp?: string;
+    imp?: string;
+    dcrType?: string;
+
+    // Inverter
+    ratedPower?: string;
+    inputVoltage?: string;
+    outputVoltage?: string;
+    inverterType?: string;
+
+    // Other
+    description?: string;
 }
 
 interface ProductLabelProps {
@@ -24,6 +42,7 @@ interface ProductLabelProps {
 const ProductLabel: React.FC<ProductLabelProps> = ({ data, id }) => {
     // Using the high-quality template background
     const BACKGROUND_URL = "https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Images/Template_label_new.png";
+    const DTF_BACKGROUND_URL = "https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Images/template_label_DTF.png";
     const labelRef = useRef<HTMLDivElement>(null);
 
     const handlePrint = () => {
@@ -117,7 +136,7 @@ const ProductLabel: React.FC<ProductLabelProps> = ({ data, id }) => {
 
                     {/* Layer 1: Background Template embedded inside SVG for high-quality export */}
                     <image
-                        href={BACKGROUND_URL}
+                        href={(data.itemType === 'Battery' || !data.itemType) ? BACKGROUND_URL : DTF_BACKGROUND_URL}
                         x="0"
                         y="0"
                         width="50"
@@ -149,29 +168,63 @@ const ProductLabel: React.FC<ProductLabelProps> = ({ data, id }) => {
                     </g>
 
                     {/* Layer 2: Dynamic Data Overlay */}
+                    {(() => {
+                        const spots = [];
+                        if (data.itemType === 'Solar Panel') {
+                            spots.push({ label: 'Peak Power', value: data.peakPower || '-' });
+                            spots.push({ label: 'Weight', value: data.weight || '-' });
+                            spots.push({ label: 'Vmp / Imp', value: (data.vmp && data.imp) ? `${data.vmp}V / ${data.imp}A` : '-' });
+                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: 'Type', value: data.dcrType || '-' });
+                            spots.push({ label: 'Batch / ID', value: data.productId });
+                        } else if (data.itemType === 'Inverter') {
+                            spots.push({ label: 'Rated Power', value: data.ratedPower || '-' });
+                            spots.push({ label: 'Weight', value: data.weight || '-' });
+                            spots.push({ label: 'In / Out V', value: (data.inputVoltage && data.outputVoltage) ? `${data.inputVoltage}V / ${data.outputVoltage}V` : '-' });
+                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: 'Type', value: data.inverterType || '-' });
+                            spots.push({ label: 'Batch / ID', value: data.productId });
+                        } else if (data.itemType === 'Other') {
+                            spots.push({ label: 'Description', value: data.description || '-' });
+                            spots.push({ label: 'Weight', value: data.weight || '-' });
+                            spots.push({ label: '', value: '' });
+                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: '', value: '' });
+                            spots.push({ label: 'Batch / ID', value: data.productId });
+                        } else {
+                            spots.push({ label: 'Voltage', value: data.voltage || '-' });
+                            spots.push({ label: 'Weight', value: data.weight || '-' });
+                            spots.push({ label: 'Capacity', value: data.capacity || '-' });
+                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: 'Energy', value: data.energy || '-' });
+                            spots.push({ label: 'Batch / ID', value: data.productId });
+                        }
 
-                    {/* Data Grid - Aligned with Shifted Grid Lines */}
+                        return (
+                            <g>
+                                {/* Row 1: y 2.0 - 9.0 */}
+                                <text x="18" y="4.5" className="txt-label">{spots[0]?.label}</text>
+                                <text x="18" y="7.5" className="txt-value">{spots[0]?.value}</text>
 
-                    {/* Row 1: y 2.0 - 9.0 */}
-                    <text x="18" y="4.5" className="txt-label">Voltage</text>
-                    <text id="voltage_v" x="18" y="7.5" className="txt-value">{data.voltage}</text>
+                                <text x="27" y="4.5" className="txt-label">{spots[1]?.label}</text>
+                                <text x="27" y="7.5" className="txt-value">{spots[1]?.value}</text>
 
-                    <text x="27" y="4.5" className="txt-label">Weight</text>
-                    <text id="weight" x="27" y="7.5" className="txt-value">{data.weight}</text>
+                                {/* Row 2: y 9.0 - 16.0 */}
+                                <text x="18" y="11.5" className="txt-label">{spots[2]?.label}</text>
+                                <text x="18" y="14.5" className={spots[2]?.value?.length > 10 ? 'txt-value-sm' : 'txt-value'}>{spots[2]?.value}</text>
 
-                    {/* Row 2: y 9.0 - 16.0 */}
-                    <text x="18" y="11.5" className="txt-label">Capacity</text>
-                    <text id="capacity_ah" x="18" y="14.5" className="txt-value">{data.capacity}</text>
+                                <text x="27" y="11.5" className="txt-label">{spots[3]?.label}</text>
+                                <text x="27" y="14.5" className="txt-value">{spots[3]?.value}</text>
 
-                    <text x="27" y="11.5" className="txt-label">Mfg Date</text>
-                    <text id="manufacture_date" x="27" y="14.5" className="txt-value">{data.mfgDate}</text>
+                                {/* Row 3: y 16.0 - 23.0 */}
+                                <text x="18" y="18.5" className="txt-label">{spots[4]?.label}</text>
+                                <text x="18" y="21.5" className="txt-value-sm">{spots[4]?.value}</text>
 
-                    {/* Row 3: y 16.0 - 23.0 */}
-                    <text x="18" y="18.5" className="txt-label">Energy</text>
-                    <text id="energy" x="18" y="21.5" className="txt-value-sm">{data.energy}</text>
-
-                    <text x="27" y="18.5" className="txt-label">Batch / ID</text>
-                    <text id="product_id" x="27" y="21.5" className="txt-value-sm">{data.productId}</text>
+                                <text x="27" y="18.5" className="txt-label">{spots[5]?.label}</text>
+                                <text x="27" y="21.5" className="txt-value-sm">{spots[5]?.value}</text>
+                            </g>
+                        );
+                    })()}
 
                     {/* QR Code Area - Left Side */}
                     <svg x="1.5" y="13" width="13" height="13" viewBox="0 0 29 29">

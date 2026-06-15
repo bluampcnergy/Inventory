@@ -41,6 +41,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedBatches, setSelectedBatches] = useState<Set<string>>(new Set());
     const [statusFilter, setStatusFilter] = useState<FilterStatus>('ready');
+    const [typeFilter, setTypeFilter] = useState<'all' | 'Battery' | 'Solar Panel' | 'Inverter' | 'Other'>('all');
 
     // Bulk Print State
     const [bulkLabels, setBulkLabels] = useState<any[]>([]);
@@ -60,6 +61,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             : '-';
 
         return {
+            itemType: meta.itemType || 'Battery',
             productName: recipeName,
             voltage: meta.voltage ? `${meta.voltage} V` : '-',
             capacity: meta.capacity ? `${meta.capacity} Ah` : '-',
@@ -69,7 +71,18 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             weight: meta.weight ? `${meta.weight} kg` : '-',
             productId: unitId,
             qrCodeUrl: unitId, // Simple string for now, could be a full URL
-            email: 'sales@cnergy.co.in'
+            email: 'sales@cnergy.co.in',
+            
+            // DTF Fields
+            peakPower: meta.peakPower ? `${meta.peakPower} W` : undefined,
+            vmp: meta.vmp ? `${meta.vmp}` : undefined,
+            imp: meta.imp ? `${meta.imp}` : undefined,
+            dcrType: meta.dcrType,
+            ratedPower: meta.ratedPower ? `${meta.ratedPower} kW` : undefined,
+            inputVoltage: meta.inputVoltage ? `${meta.inputVoltage}` : undefined,
+            outputVoltage: meta.outputVoltage ? `${meta.outputVoltage}` : undefined,
+            inverterType: meta.inverterType,
+            description: meta.description
         };
     };
 
@@ -113,8 +126,34 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             const sellableQty = selectedUnits.length;
             
             let description = getRecipeName(fg.recipeId);
+            
+            // The DTF should not be in the naming of the finished good in the invoice
+            description = description.replace(/\bDTF\s*-?\s*/gi, '').trim();
+
             if (selectedUnits.length > 0) {
                 description += `\nS/N: ${selectedUnits.join(', ')}`;
+                
+                // Get metadata from the first unit to add specs
+                const firstUnitId = selectedUnits[0];
+                const meta = fg.unitMetadata?.[firstUnitId];
+                if (meta) {
+                    const specs: string[] = [];
+                    if (meta.itemType === 'Battery') {
+                        if (meta.voltage) specs.push(`${meta.voltage}V`);
+                        if (meta.capacity) specs.push(`${meta.capacity}Ah`);
+                    } else if (meta.itemType === 'Solar Panel') {
+                        if (meta.peakPower) specs.push(`${meta.peakPower}W`);
+                        if (meta.dcrType) specs.push(meta.dcrType);
+                    } else if (meta.itemType === 'Inverter') {
+                        if (meta.ratedPower) specs.push(`${meta.ratedPower}kW`);
+                        if (meta.inverterType) specs.push(meta.inverterType);
+                    } else if (meta.itemType === 'Other') {
+                        if (meta.description) specs.push(meta.description);
+                    }
+                    if (specs.length > 0) {
+                        description += `\nSpecs: ${specs.join(', ')}`;
+                    }
+                }
             }
 
             return {
@@ -267,14 +306,11 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                 newMetadata[id] = currentSpec;
             } else {
                 // Other units get shared values copied, but keep their own resistance
+                const newSharedSpec = { ...currentSpec };
+                delete newSharedSpec.resistance; // Do not copy resistance
                 newMetadata[id] = {
                     ...existing,
-                    chemistry: currentSpec.chemistry,
-                    balancing: currentSpec.balancing,
-                    voltage: currentSpec.voltage,
-                    capacity: currentSpec.capacity,
-                    weight: currentSpec.weight,
-                    // Do not copy resistance, keep existing or undefined
+                    ...newSharedSpec,
                     resistance: existing.resistance
                 };
             }
@@ -407,6 +443,14 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
         if (statusFilter === 'delivered' && deliveredCount === 0) return false;
         if (statusFilter === 'dismantled' && dismantledCount === 0) return false;
 
+        // 3. Type Filter
+        if (typeFilter !== 'all') {
+            const unitIds = generateUnitIds(good, finishedGoods, recipes);
+            const firstUnitId = unitIds[0];
+            const itemType = firstUnitId && good.unitMetadata?.[firstUnitId]?.itemType ? good.unitMetadata[firstUnitId].itemType : 'Battery';
+            if (itemType !== typeFilter) return false;
+        }
+
         return true;
     });
 
@@ -498,6 +542,40 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                 />
+
+                {/* Type Filters */}
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setTypeFilter('all')}
+                        className={`px-4 py-1.5 text-xs font-medium rounded-full border transition-all ${typeFilter === 'all' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                    >
+                        All Types
+                    </button>
+                    <button
+                        onClick={() => setTypeFilter('Battery')}
+                        className={`px-4 py-1.5 text-xs font-medium rounded-full border transition-all ${typeFilter === 'Battery' ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45] shadow-sm font-bold' : 'bg-white text-gray-600 border-gray-300 hover:bg-[#A8BF75]/20'}`}
+                    >
+                        Batteries
+                    </button>
+                    <button
+                        onClick={() => setTypeFilter('Solar Panel')}
+                        className={`px-4 py-1.5 text-xs font-medium rounded-full border transition-all ${typeFilter === 'Solar Panel' ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-indigo-50'}`}
+                    >
+                        Solar Panels
+                    </button>
+                    <button
+                        onClick={() => setTypeFilter('Inverter')}
+                        className={`px-4 py-1.5 text-xs font-medium rounded-full border transition-all ${typeFilter === 'Inverter' ? 'bg-blue-500 text-white border-blue-500 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-blue-50'}`}
+                    >
+                        Inverters
+                    </button>
+                    <button
+                        onClick={() => setTypeFilter('Other')}
+                        className={`px-4 py-1.5 text-xs font-medium rounded-full border transition-all ${typeFilter === 'Other' ? 'bg-purple-500 text-white border-purple-500 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-purple-50'}`}
+                    >
+                        Other
+                    </button>
+                </div>
             </div>
 
             {/* Finished Goods Table View */}
@@ -635,8 +713,30 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                                                 <span className="font-mono text-sm font-bold block text-slate-800">{id}</span>
                                                 {meta && (
                                                     <div className="text-xs text-gray-500 flex flex-wrap gap-2 mt-1">
-                                                        {meta.chemistry && <span className="bg-blue-100 text-blue-700 px-1.5 rounded">{meta.chemistry}</span>}
-                                                        {energy && <span>{energy}</span>}
+                                                        <span className="bg-gray-100 text-gray-700 px-1.5 rounded font-medium border border-gray-200">
+                                                            {meta.itemType || 'Battery'}
+                                                        </span>
+                                                        {(!meta.itemType || meta.itemType === 'Battery') && (
+                                                            <>
+                                                                {meta.chemistry && <span className="bg-blue-100 text-blue-700 px-1.5 rounded">{meta.chemistry}</span>}
+                                                                {energy && <span>{energy}</span>}
+                                                            </>
+                                                        )}
+                                                        {meta.itemType === 'Solar Panel' && (
+                                                            <>
+                                                                {meta.peakPower && <span className="bg-orange-100 text-orange-700 px-1.5 rounded">{meta.peakPower}W</span>}
+                                                                {meta.dcrType && <span className="bg-yellow-100 text-yellow-700 px-1.5 rounded">{meta.dcrType}</span>}
+                                                            </>
+                                                        )}
+                                                        {meta.itemType === 'Inverter' && (
+                                                            <>
+                                                                {meta.ratedPower && <span className="bg-purple-100 text-purple-700 px-1.5 rounded">{meta.ratedPower}kW</span>}
+                                                                {meta.inverterType && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded">{meta.inverterType}</span>}
+                                                            </>
+                                                        )}
+                                                        {meta.itemType === 'Other' && meta.description && (
+                                                            <span className="italic truncate max-w-xs">{meta.description}</span>
+                                                        )}
                                                         {meta.weight && <span>{meta.weight}kg</span>}
                                                     </div>
                                                 )}
@@ -724,71 +824,233 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             {/* Unit Specs Modal */}
             <Modal isOpen={isSpecModalOpen} onClose={() => setIsSpecModalOpen(false)} title={`Unit Specifications: ${selectedUnitId}`} size="md">
                 <form onSubmit={handleSaveSpec} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Chemistry</label>
-                            <select
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
-                                value={currentSpec.chemistry || 'LFP'}
-                                onChange={e => setCurrentSpec({ ...currentSpec, chemistry: e.target.value as any })}
-                            >
-                                <option value="LFP">LFP</option>
-                                <option value="NMC">NMC</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Balancing</label>
-                            <select
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
-                                value={currentSpec.balancing || 'No'}
-                                onChange={e => setCurrentSpec({ ...currentSpec, balancing: e.target.value as any })}
-                            >
-                                <option value="No">No</option>
-                                <option value="Yes(passive)">Yes (Passive)</option>
-                                <option value="Yes(active)">Yes (Active)</option>
-                            </select>
-                        </div>
+                    <div className="mb-4">
+                        <label className="block text-sm font-bold text-gray-700">Item Type</label>
+                        <select
+                            className="mt-1 block w-full border border-[#8EBF45] rounded-md shadow-sm p-2 text-sm bg-gray-50 font-semibold"
+                            value={currentSpec.itemType || 'Battery'}
+                            onChange={e => setCurrentSpec({ ...currentSpec, itemType: e.target.value as any })}
+                        >
+                            <option value="Battery">Battery</option>
+                            <option value="Solar Panel">Solar Panel</option>
+                            <option value="Inverter">Inverter</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Voltage (V)</label>
-                            <input
-                                type="number" step="0.01"
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                value={currentSpec.voltage || ''}
-                                onChange={e => setCurrentSpec({ ...currentSpec, voltage: parseFloat(e.target.value) })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Capacity (Ah)</label>
-                            <input
-                                type="number" step="0.01"
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                value={currentSpec.capacity || ''}
-                                onChange={e => setCurrentSpec({ ...currentSpec, capacity: parseFloat(e.target.value) })}
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Resistance (mΩ)</label>
-                            <input
-                                type="number" step="0.01"
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                value={currentSpec.resistance || ''}
-                                onChange={e => setCurrentSpec({ ...currentSpec, resistance: parseFloat(e.target.value) })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
-                            <input
-                                type="number" step="0.01"
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                value={currentSpec.weight || ''}
-                                onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
-                            />
-                        </div>
-                    </div>
+
+                    {/* Conditional Fields based on itemType */}
+                    {(!currentSpec.itemType || currentSpec.itemType === 'Battery') && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Chemistry</label>
+                                    <select
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
+                                        value={currentSpec.chemistry || 'LFP'}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, chemistry: e.target.value as any })}
+                                    >
+                                        <option value="LFP">LFP</option>
+                                        <option value="NMC">NMC</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Balancing</label>
+                                    <select
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
+                                        value={currentSpec.balancing || 'No'}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, balancing: e.target.value as any })}
+                                    >
+                                        <option value="No">No</option>
+                                        <option value="Yes(passive)">Yes (Passive)</option>
+                                        <option value="Yes(active)">Yes (Active)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Voltage (V)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.voltage || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, voltage: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Capacity (Ah)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.capacity || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, capacity: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Resistance (mΩ)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.resistance || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, resistance: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.weight || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {currentSpec.itemType === 'Solar Panel' && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Peak Power (W)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.peakPower || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, peakPower: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Type</label>
+                                    <select
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
+                                        value={currentSpec.dcrType || 'Non DCR'}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, dcrType: e.target.value as any })}
+                                    >
+                                        <option value="DCR">DCR</option>
+                                        <option value="Non DCR">Non DCR</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Vmp (V)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.vmp || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, vmp: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Imp (A)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.imp || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, imp: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div></div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.weight || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {currentSpec.itemType === 'Inverter' && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Rated Power (kW)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.ratedPower || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, ratedPower: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Inverter Type</label>
+                                    <select
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm bg-white"
+                                        value={currentSpec.inverterType || 'Non Solar'}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, inverterType: e.target.value as any })}
+                                    >
+                                        <option value="Solar PWM">Solar PWM</option>
+                                        <option value="Solar MPPT">Solar MPPT</option>
+                                        <option value="Non Solar">Non Solar</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Input Voltage (V)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.inputVoltage || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, inputVoltage: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Output Voltage (V)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.outputVoltage || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, outputVoltage: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div></div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                                    <input
+                                        type="number" step="0.01"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                        value={currentSpec.weight || ''}
+                                        onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {currentSpec.itemType === 'Other' && (
+                        <>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700">Description / Specs</label>
+                                <input
+                                    type="text"
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                    value={currentSpec.description || ''}
+                                    onChange={e => setCurrentSpec({ ...currentSpec, description: e.target.value })}
+                                    placeholder="Enter specifications..."
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
+                                <input
+                                    type="number" step="0.01"
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                                    value={currentSpec.weight || ''}
+                                    onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
+                                />
+                            </div>
+                        </>
+                    )}
 
                     <div className="bg-gray-100 p-3 rounded-md text-center">
                         <p className="text-xs text-gray-500 uppercase font-bold">Total Energy</p>

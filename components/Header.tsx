@@ -157,10 +157,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 {userRole === 'admin' && (
                   <>
                     <SubNavButton isActive={currentView === 'finance_gst'} onClick={() => setView('finance_gst')}>GST Returns</SubNavButton>
-                    <SubNavButton isActive={currentView === 'finance_expenses'} onClick={() => setView('finance_expenses')}>Expenses</SubNavButton>
                     <SubNavButton isActive={currentView === 'finance_prices'} onClick={() => setView('finance_prices')}>Prices</SubNavButton>
                   </>
                 )}
+                <SubNavButton isActive={currentView === 'finance_expenses'} onClick={() => setView('finance_expenses')}>Expenses</SubNavButton>
               </>
             )}
             {currentCategory === 'analytics' && (
