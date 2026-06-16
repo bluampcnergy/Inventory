@@ -2,6 +2,34 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
+// Fields that exist in client TypeScript interfaces but NOT in Supabase table schemas.
+// These must be stripped before upsert to avoid PGRST204 ("column not found") errors.
+const CLIENT_ONLY_FIELDS: Record<string, string[]> = {
+  finished_goods: ['isDTF'],
+};
+
+// Strip client-only fields before sending to Supabase
+const sanitizeForUpload = (tableName: string, item: any): any => {
+  const fieldsToStrip = CLIENT_ONLY_FIELDS[tableName];
+  if (!fieldsToStrip || fieldsToStrip.length === 0) return item;
+  const cleaned = { ...item };
+  for (const field of fieldsToStrip) {
+    delete cleaned[field];
+  }
+  return cleaned;
+};
+
+// Re-derive client-only fields after loading from Supabase
+const rehydrateFromDb = (tableName: string, items: any[]): any[] => {
+  if (tableName === 'finished_goods') {
+    return items.map(item => ({
+      ...item,
+      isDTF: typeof item.isDTF === 'boolean' ? item.isDTF : String(item.id || '').startsWith('fin-dtf-'),
+    }));
+  }
+  return items;
+};
+
 export function useSupabase<T>(
   tableName: string,
   initialValue: T[],
@@ -78,9 +106,10 @@ export function useSupabase<T>(
             return true;
           });
           console.log(`[useSupabase] Loaded ${allData.length} unique rows from '${tableName}'`);
-          setData(allData as unknown as T[]);
-          lastSyncedData.current = allData as unknown as T[];
-          dataRef.current = allData as unknown as T[];
+          const hydrated = rehydrateFromDb(tableName, allData) as unknown as T[];
+          setData(hydrated);
+          lastSyncedData.current = hydrated;
+          dataRef.current = hydrated;
         }
         initialFetchDone.current = true;
       } catch (error: any) {
@@ -140,7 +169,8 @@ export function useSupabase<T>(
         }
       }
       if (toUpsert.length > 0) {
-        const chunks = chunkArray(toUpsert, CHUNK_SIZE);
+        const sanitized = toUpsert.map(item => sanitizeForUpload(tableName, item));
+        const chunks = chunkArray(sanitized, CHUNK_SIZE);
         for (const chunk of chunks) {
           const { error } = await supabase.from(tableName).upsert(chunk);
           if (error) {

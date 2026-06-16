@@ -171,18 +171,18 @@ const ProductLabel: React.FC<ProductLabelProps> = ({ data, id }) => {
                     {(() => {
                         const spots = [];
                         if (data.itemType === 'Solar Panel') {
-                            spots.push({ label: 'Peak Power', value: data.peakPower || '-' });
-                            spots.push({ label: 'Weight', value: data.weight || '-' });
+                            spots.push({ label: 'Rating', value: data.peakPower || '-' });
+                            spots.push({ label: 'Type', value: data.dcrType || '-' });
                             spots.push({ label: 'Vmp / Imp', value: (data.vmp && data.imp) ? `${data.vmp}V / ${data.imp}A` : '-' });
                             spots.push({ label: 'Mfg Date', value: data.mfgDate });
-                            spots.push({ label: 'Type', value: data.dcrType || '-' });
+                            spots.push({ label: '', value: '' });
                             spots.push({ label: 'Batch / ID', value: data.productId });
                         } else if (data.itemType === 'Inverter') {
-                            spots.push({ label: 'Rated Power', value: data.ratedPower || '-' });
-                            spots.push({ label: 'Weight', value: data.weight || '-' });
-                            spots.push({ label: 'In / Out V', value: (data.inputVoltage && data.outputVoltage) ? `${data.inputVoltage}V / ${data.outputVoltage}V` : '-' });
-                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: 'Rating', value: data.ratedPower || '-' });
                             spots.push({ label: 'Type', value: data.inverterType || '-' });
+                            spots.push({ label: 'Batt. Voltage', value: data.outputVoltage ? `${data.outputVoltage}V` : '-' });
+                            spots.push({ label: 'Mfg Date', value: data.mfgDate });
+                            spots.push({ label: '', value: '' });
                             spots.push({ label: 'Batch / ID', value: data.productId });
                         } else if (data.itemType === 'Other') {
                             spots.push({ label: 'Description', value: data.description || '-' });

@@ -74,11 +74,11 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
             email: 'sales@cnergy.co.in',
             
             // DTF Fields
-            peakPower: meta.peakPower ? `${meta.peakPower} W` : undefined,
+            peakPower: meta.peakPower ? `${meta.peakPower} Wp` : undefined,
             vmp: meta.vmp ? `${meta.vmp}` : undefined,
             imp: meta.imp ? `${meta.imp}` : undefined,
             dcrType: meta.dcrType,
-            ratedPower: meta.ratedPower ? `${meta.ratedPower} kW` : undefined,
+            ratedPower: meta.ratedPower ? `${meta.ratedPower} KVA` : undefined,
             inputVoltage: meta.inputVoltage ? `${meta.inputVoltage}` : undefined,
             outputVoltage: meta.outputVoltage ? `${meta.outputVoltage}` : undefined,
             inverterType: meta.inverterType,
@@ -142,10 +142,10 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                         if (meta.voltage) specs.push(`${meta.voltage}V`);
                         if (meta.capacity) specs.push(`${meta.capacity}Ah`);
                     } else if (meta.itemType === 'Solar Panel') {
-                        if (meta.peakPower) specs.push(`${meta.peakPower}W`);
+                        if (meta.peakPower) specs.push(`${meta.peakPower}Wp`);
                         if (meta.dcrType) specs.push(meta.dcrType);
                     } else if (meta.itemType === 'Inverter') {
-                        if (meta.ratedPower) specs.push(`${meta.ratedPower}kW`);
+                        if (meta.ratedPower) specs.push(`${meta.ratedPower}KVA`);
                         if (meta.inverterType) specs.push(meta.inverterType);
                     } else if (meta.itemType === 'Other') {
                         if (meta.description) specs.push(meta.description);
@@ -913,7 +913,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Peak Power (W)</label>
+                                    <label className="block text-sm font-medium text-gray-700">Peak Power (Wp)</label>
                                     <input
                                         type="number" step="0.01"
                                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
@@ -953,18 +953,6 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div></div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
-                                    <input
-                                        type="number" step="0.01"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                        value={currentSpec.weight || ''}
-                                        onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
                         </>
                     )}
 
@@ -972,7 +960,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Rated Power (kW)</label>
+                                    <label className="block text-sm font-medium text-gray-700">Rated Power (KVA)</label>
                                     <input
                                         type="number" step="0.01"
                                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
@@ -995,16 +983,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Input Voltage (V)</label>
-                                    <input
-                                        type="number" step="0.01"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                        value={currentSpec.inputVoltage || ''}
-                                        onChange={e => setCurrentSpec({ ...currentSpec, inputVoltage: parseFloat(e.target.value) })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Output Voltage (V)</label>
+                                    <label className="block text-sm font-medium text-gray-700">Battery Voltage (V)</label>
                                     <input
                                         type="number" step="0.01"
                                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
@@ -1012,18 +991,7 @@ const FinishedGoods: React.FC<FinishedGoodsProps> = ({ finishedGoods, setFinishe
                                         onChange={e => setCurrentSpec({ ...currentSpec, outputVoltage: parseFloat(e.target.value) })}
                                     />
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
                                 <div></div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
-                                    <input
-                                        type="number" step="0.01"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                                        value={currentSpec.weight || ''}
-                                        onChange={e => setCurrentSpec({ ...currentSpec, weight: parseFloat(e.target.value) })}
-                                    />
-                                </div>
                             </div>
                         </>
                     )}
