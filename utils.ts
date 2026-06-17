@@ -1,7 +1,7 @@
 
 import type { FinishedGood, Recipe } from './types';
 
-// Timestamp cutoff for when we switched ID generation logic.
+// Timestamp cutoff for when we switched ID generation logic..
 // Items created BEFORE this timestamp will use the old legacy logic to preserve history.
 // Items created AFTER will use the new short/jumbled logic.
 // Set to a recent timestamp (approx Feb 8, 2025).
