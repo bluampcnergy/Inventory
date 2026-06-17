@@ -125,8 +125,8 @@ const ProductLabel: React.FC<ProductLabelProps> = ({ data, id }) => {
                         <style>
                             {`
                             .txt-label { font-family: Arial, sans-serif; font-size: 1.7px; fill: #000000; font-weight: bold; }
-                            .txt-value { font-family: Arial, sans-serif; font-size: 2.2px; fill: #000000; font-weight: bold; }
-                            .txt-value-sm { font-family: Arial, sans-serif; font-size: 1.8px; fill: #000000; font-weight: bold; }
+                            .txt-value { font-family: Arial, sans-serif; font-size: 1.8px; fill: #000000; font-weight: bold; }
+                            .txt-value-sm { font-family: Arial, sans-serif; font-size: 1.5px; fill: #000000; font-weight: bold; }
                             .txt-header { font-family: Arial, sans-serif; font-size: 2.3px; fill: #4a7c26; font-weight: bold; text-transform: uppercase; letter-spacing: 0.1px; }
                             .txt-small { font-family: Arial, sans-serif; font-size: 1.1px; fill: #444; }
                             .tbl-line { stroke: #000000; stroke-width: 0.15px; }
