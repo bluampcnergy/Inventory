@@ -1,7 +1,7 @@
 import { ExtractedInvoice, EMPTY_INVOICE } from "../types";
 
 // Read from Vercel env var (injected by vite.config.ts)
-const DEFAULT_API_KEY = process.env.OPENROUTER_API_KEY || "";
+const DEFAULT_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || "";
 const DEFAULT_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free";
 
 export const extractInvoiceDataOpenRouter = async (
