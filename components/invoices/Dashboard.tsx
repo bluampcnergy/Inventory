@@ -184,7 +184,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
 
     // Filters
     const [invoiceType, setInvoiceType] = useState<'purchase' | 'sales'>('purchase');
-    const [documentCategory, setDocumentCategory] = useState<'invoice' | 'po' | 'quotation' | 'proforma_invoice' | 'debit_note' | 'credit_note' | 'receipt'>('invoice');
+    const [documentCategory, setDocumentCategory] = useState<'invoice' | 'po' | 'quotation' | 'proforma_invoice' | 'debit_note' | 'credit_note'>('invoice');
     const [filterStart, setFilterStart] = useState('');
     const [filterEnd, setFilterEnd] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -255,9 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
             query = query.eq('source_type', invoiceType);
 
             if (documentCategory === 'invoice') {
-                query = query.in('document_type', ['invoice', 'generated_invoice', 'other']);
-            } else if (documentCategory === 'receipt') {
-                query = query.eq('document_type', 'receipt');
+                query = query.in('document_type', ['invoice', 'generated_invoice', 'receipt', 'other']);
             } else if (documentCategory === 'po') {
                  query = query.in('document_type', ['po', 'generated_po', 'purchase_order']);
             } else if (documentCategory === 'quotation') {
@@ -478,7 +476,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
                     { id: 'invoice', label: 'Invoices' },
                     { id: 'quotation', label: 'Quotations' },
                     { id: 'po', label: 'Purchase Orders' },
-                    { id: 'receipt', label: 'Expenses / Receipts' },
                     { id: 'proforma_invoice', label: 'Proforma Invoices' },
                     { id: 'credit_note', label: 'Credit Notes' },
                     { id: 'debit_note', label: 'Debit Notes' }

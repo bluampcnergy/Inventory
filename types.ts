@@ -195,6 +195,21 @@ export interface StorageItem {
   timestamp: number;
 }
 
+// --- Employee Expense Ledger ---
+
+export interface Expense {
+  id: string;
+  employee_name: string;
+  date: string;
+  type: 'debit' | 'credit';
+  category: string;
+  description: string;
+  amount: number;
+  image_link?: string;
+  created_by: string;
+  created_at?: string;
+}
+
 // --- Finance & Invoice Types ---
 
 export interface BankDetails {
