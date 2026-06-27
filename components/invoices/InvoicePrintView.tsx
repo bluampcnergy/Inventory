@@ -41,7 +41,7 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, onClose, a
             hsn: true,
             quantity: true,
             rate: true,
-            discount: true,
+            discount: false,
             taxableValue: true,
             total: true
         }

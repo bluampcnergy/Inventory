@@ -82,7 +82,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         hsn: true,
         quantity: true,
         rate: true,
-        discount: true,
+        discount: false,
         taxableValue: true,
         total: true
     });
