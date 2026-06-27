@@ -6,6 +6,7 @@ import { recalculateInvoiceTotals, safeRender, amountToWords, getTaxMode, getCur
 import { Save, Printer, Plus, Trash2, SettingsIcon, Columns, Wallet, Download, RefreshCw, ChevronUp, ChevronDown, Loader2, LayoutDashboard } from './Icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { ImportIcon } from '../icons/ImportIcon';
+import AiChatPanel from './AiChatPanel';
 
 interface InvoiceMakerProps {
     currentUser: { username: string } | null;
@@ -223,9 +224,120 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 setStamp(loadedConfig.stampUrl || null);
                 setSignature(loadedConfig.signatureUrl || null);
             }
+
+            // Hydrate from Slack AI payload if present
+            if ((initialData.invoice_metadata as any)?.slack_ai_payload) {
+                setTimeout(() => handleApplyAiData((initialData.invoice_metadata as any).slack_ai_payload), 500);
+            }
         }
         fetchTemplates();
     }, [initialData]);
+
+    const handleApplyAiData = (data: any) => {
+        if (!data) return;
+
+        // 1. Doc Type & Template
+        if (data.document_type) {
+            setDocType(data.document_type);
+            setCustomTitle(data.document_type === 'invoice' ? 'INVOICE' : data.document_type === 'po' ? 'PURCHASE ORDER' : data.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+        }
+        if (data.template_name && templates.length > 0) {
+            const tmpl = templates.find(t => t.name === data.template_name);
+            if (tmpl) {
+                setSelectedTemplateId(tmpl.id || '');
+                loadTemplate(tmpl);
+            }
+        }
+
+        // 2. Company
+        if (data.company_match?.name) {
+            loadCompanyProfile('receiver', data.company_match.name);
+            if (data.company_match.is_new_company) {
+                updateParty('receiver', 'name', data.company_match.name);
+            }
+        }
+
+        // 3. Items
+        if (data.items && Array.isArray(data.items)) {
+            const newItems: InvoiceItem[] = data.items.map((aiItem: any) => {
+                let unit_price = aiItem.unit_price || 0;
+                let hsn_sac = '';
+                let igst_rate = 18;
+
+                if (!aiItem.is_custom_product) {
+                    const matchedProduct = priceList.find(p => p.model_name === aiItem.description);
+                    if (matchedProduct) {
+                        unit_price = matchedProduct.price_without_gst;
+                        hsn_sac = matchedProduct.hsn_code || '';
+                    }
+                }
+
+                const quantity = aiItem.quantity || 1;
+                const taxable_value = quantity * unit_price;
+                const item: InvoiceItem = {
+                    description: aiItem.description || '',
+                    hsn_sac,
+                    quantity,
+                    unit_price,
+                    discount: 0,
+                    taxable_value,
+                    cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0, igst_rate, igst_amount: 0, total_value: 0
+                };
+                return item;
+            });
+
+            // Recalculate taxes for new items
+            const finalItems = newItems.map(item => {
+                const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
+                const taxRate = Number(item.igst_rate || 18);
+                const taxable = item.taxable_value || 0;
+                
+                if (taxMode === 'intra') {
+                    const halfRate = taxRate / 2;
+                    item.cgst_rate = halfRate;
+                    item.cgst_amount = taxable * (halfRate / 100);
+                    item.sgst_rate = halfRate;
+                    item.sgst_amount = taxable * (halfRate / 100);
+                    item.igst_amount = 0;
+                } else {
+                    item.igst_amount = taxable * (taxRate / 100);
+                    item.cgst_rate = 0; item.cgst_amount = 0; item.sgst_rate = 0; item.sgst_amount = 0;
+                }
+                item.total_value = taxable + (item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0);
+                return item;
+            });
+
+            setDoc(prev => ({
+                ...prev,
+                items: finalItems,
+                totals: { ...prev.totals, ...recalculateInvoiceTotals(finalItems) }
+            }));
+        }
+
+        // 4. UI Options
+        if (data.ui_options) {
+            setConfig(prev => ({
+                ...prev,
+                showReceiverSign: data.ui_options.showReceiverSign !== null ? data.ui_options.showReceiverSign : prev.showReceiverSign,
+                showQRCode: data.ui_options.showQRCode !== null ? data.ui_options.showQRCode : prev.showQRCode,
+                showTotalsTable: data.ui_options.showTotalsTable !== null ? data.ui_options.showTotalsTable : prev.showTotalsTable,
+                showTaxTable: data.ui_options.showTaxTable !== null ? data.ui_options.showTaxTable : prev.showTaxTable,
+                terms: data.ui_options.terms !== null ? data.ui_options.terms : prev.terms,
+            }));
+
+            if (data.ui_options.visibleColumns) {
+                setVisibleColumns(prev => {
+                    const updated = { ...prev };
+                    Object.keys(data.ui_options.visibleColumns).forEach(key => {
+                        if (data.ui_options.visibleColumns[key] !== null) {
+                            (updated as any)[key] = data.ui_options.visibleColumns[key];
+                        }
+                    });
+                    return updated;
+                });
+            }
+        }
+    };
 
     useEffect(() => {
         setAmountInWordsStr(amountToWords(doc.totals.grand_total || 0, doc.totals.currency));
@@ -1659,6 +1771,14 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                     </div>
                 </div>
             )}
+            
+            {/* AI Chat Panel */}
+            <AiChatPanel 
+                companyProfiles={companyProfiles} 
+                priceList={priceList} 
+                templates={templates} 
+                onApplyAiData={handleApplyAiData} 
+            />
         </div>
     );
 };

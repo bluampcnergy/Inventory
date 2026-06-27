@@ -260,3 +260,111 @@ export const generateTextResponse = async (prompt: string): Promise<string> => {
         return `Error: ${error.message}`;
     }
 };
+
+const aiAssistantSchema = {
+  type: Type.OBJECT,
+  properties: {
+    document_type: { type: Type.STRING, enum: ["invoice", "po", "quotation", "proforma"] },
+    template_name: { type: Type.STRING, nullable: true },
+    company_match: {
+      type: Type.OBJECT,
+      properties: {
+        name: { type: Type.STRING },
+        is_new_company: { type: Type.BOOLEAN }
+      }
+    },
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          description: { type: Type.STRING },
+          quantity: { type: Type.NUMBER },
+          unit_price: { type: Type.NUMBER },
+          is_custom_product: { type: Type.BOOLEAN }
+        }
+      }
+    },
+    ui_options: {
+      type: Type.OBJECT,
+      properties: {
+        showReceiverSign: { type: Type.BOOLEAN, nullable: true },
+        showQRCode: { type: Type.BOOLEAN, nullable: true },
+        showTotalsTable: { type: Type.BOOLEAN, nullable: true },
+        showTaxTable: { type: Type.BOOLEAN, nullable: true },
+        terms: { type: Type.STRING, nullable: true },
+        visibleColumns: {
+          type: Type.OBJECT,
+          properties: {
+            index: { type: Type.BOOLEAN, nullable: true },
+            description: { type: Type.BOOLEAN, nullable: true },
+            hsn: { type: Type.BOOLEAN, nullable: true },
+            quantity: { type: Type.BOOLEAN, nullable: true },
+            rate: { type: Type.BOOLEAN, nullable: true },
+            discount: { type: Type.BOOLEAN, nullable: true },
+            taxableValue: { type: Type.BOOLEAN, nullable: true },
+            total: { type: Type.BOOLEAN, nullable: true }
+          }
+        }
+      }
+    }
+  }
+};
+
+export const generateInvoiceFromText = async (
+    prompt: string, 
+    context: {
+        companies: string[];
+        products: { model_name: string; price_without_gst: number }[];
+        templates: string[];
+    }
+): Promise<any> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: API_KEY });
+        
+        const systemPrompt = `You are an AI Invoice Assistant for the Datlion Cnergy Plant OS. Your job is to translate a user's natural language request into a strict JSON payload that will be used to automatically fill out an Invoice/Quotation form.
+
+You will be provided with the following SYSTEM CONTEXT (data currently in the database):
+[COMPANIES]: ${JSON.stringify(context.companies)}
+[PRODUCTS]: ${JSON.stringify(context.products)}
+[TEMPLATES]: ${JSON.stringify(context.templates)}
+
+Follow these strict rules:
+
+1. **DOCUMENT TYPE**: Extract the document type. Must be one of: 'invoice', 'po', 'quotation', 'proforma'. Default is 'invoice'.
+2. **CUSTOMER/COMPANY**: Attempt to match the customer/supplier mentioned by the user to the closest name in the [COMPANIES] list. If found, return the exact matched name. If the user mentions a completely new company, return exactly what the user typed.
+3. **LINE ITEMS (PRODUCTS)**:
+   - For each product requested, try to match it to the closest product in the [PRODUCTS] list. If a match is found, return the exact model_name and its corresponding price_without_gst as the unit_price.
+   - **CUSTOM PRODUCTS**: If the user asks for a product that clearly does NOT exist in the [PRODUCTS] list, DO NOT force a match. Return the custom description exactly as the user requested and set the unit_price based on user input (or 0 if not provided). Set is_custom_product: true.
+   - Ensure you parse the requested quantity for each item (default to 1).
+4. **TEMPLATE**: If the user requests a specific template (e.g., "use template GST invoices"), match it against the [TEMPLATES] list and return the exact template name.
+5. **UI CONFIGURATION OPTIONS**: 
+   The system supports the following toggles. If the user explicitly asks to hide or show certain elements, adjust these boolean flags accordingly. If not mentioned, return them as null:
+   - showReceiverSign
+   - showQRCode
+   - showTotalsTable
+   - showTaxTable
+   - terms (string if they ask to add/edit terms)
+   - visibleColumns (index, description, hsn, quantity, rate, discount, taxableValue, total)
+
+User Request: "${prompt}"`;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: systemPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: aiAssistantSchema,
+                temperature: 0.1,
+            },
+        });
+
+        let text = response.text;
+        if (!text) throw new Error("No response from AI");
+
+        return cleanAndParseJSON(text);
+    } catch (error: any) {
+        console.error("Gemini AI Assistant Error:", error);
+        throw new Error(`AI Assistant Failed: ${error.message}`);
+    }
+};
