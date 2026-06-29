@@ -278,10 +278,38 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         generateInvoiceNumber(data.document_type, data.company_match?.name);
 
         // 2. Company
-        if (data.company_match?.name) {
-            loadCompanyProfile('receiver', data.company_match.name);
-            if (data.company_match.is_new_company) {
-                updateParty('receiver', 'name', data.company_match.name);
+        if (data.document_type === 'po') {
+            if (data.company_match?.name) {
+                loadCompanyProfile('supplier', data.company_match.name);
+                if (data.company_match.is_new_company) {
+                    updateParty('supplier', 'name', data.company_match.name);
+                }
+            }
+            
+            // Default Customer (Receiver) and Shipped To to Datlion
+            const datlionProfile = companyProfiles.find(c => c.name.toUpperCase().includes('DATLION CNERGY'));
+            if (datlionProfile) {
+                loadCompanyProfile('receiver', datlionProfile.name);
+            } else {
+                updateParty('receiver', 'name', 'DATLION CNERGY PRIVATE LIMITED');
+            }
+            
+            setDoc(prev => ({
+                ...prev,
+                shipped_to_details: {
+                    name: datlionProfile?.name || 'DATLION CNERGY PRIVATE LIMITED',
+                    address: datlionProfile?.shippingAddress || '',
+                    gstin: datlionProfile?.gstNumber || '',
+                    phone: datlionProfile?.phoneNumber || '',
+                    email: datlionProfile?.email || ''
+                }
+            }));
+        } else {
+            if (data.company_match?.name) {
+                loadCompanyProfile('receiver', data.company_match.name);
+                if (data.company_match.is_new_company) {
+                    updateParty('receiver', 'name', data.company_match.name);
+                }
             }
         }
 
