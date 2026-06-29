@@ -222,7 +222,19 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
 
     useEffect(() => {
         if (initialData) {
-            const dataToLoad = { ...initialData };
+            const dataToLoad = {
+                ...EMPTY_INVOICE,
+                ...initialData,
+                receiver_details: initialData.receiver_details || EMPTY_INVOICE.receiver_details,
+                issuer_details: {
+                    ...EMPTY_INVOICE.issuer_details,
+                    ...(initialData.issuer_details || {}),
+                    bank_details: { ...EMPTY_INVOICE.issuer_details.bank_details, ...(initialData.issuer_details?.bank_details || {}) }
+                },
+                shipped_to_details: initialData.shipped_to_details || EMPTY_INVOICE.shipped_to_details,
+                supplier_details: initialData.supplier_details || EMPTY_INVOICE.supplier_details,
+                invoice_metadata: initialData.invoice_metadata || EMPTY_INVOICE.invoice_metadata
+            };
             if ((dataToLoad.invoice_metadata as any)?.shipped_to_details) {
                 dataToLoad.shipped_to_details = (dataToLoad.invoice_metadata as any).shipped_to_details;
             }
