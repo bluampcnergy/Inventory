@@ -485,6 +485,12 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
         generateInvoiceNumber(tmpl.type as string);
     };
 
+    const handleDocTypeChange = (type: 'invoice' | 'po' | 'quotation' | 'proforma') => {
+        setDocType(type);
+        setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+        generateInvoiceNumber(type);
+    };
+
     const updateParty = (side: 'issuer' | 'receiver' | 'supplier', field: string, val: string) => {
         setDoc(prev => {
             const targetKey = side === 'issuer' ? 'issuer_details' : side === 'receiver' ? 'receiver_details' : 'supplier_details';
@@ -942,10 +948,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, companyProfile
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-slate-800">Document Maker</h2>
                     <div className="flex gap-1">
-                        <button onClick={() => { setDocType('invoice'); setCustomTitle('INVOICE'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'invoice' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Invoice</button>
-                        <button onClick={() => { setDocType('quotation'); setCustomTitle('QUOTATION'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'quotation' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Quote</button>
-                        <button onClick={() => { setDocType('po'); setCustomTitle('PURCHASE ORDER'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'po' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>PO</button>
-                        <button onClick={() => { setDocType('proforma'); setCustomTitle('PROFORMA INVOICE'); }} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'proforma' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Proforma</button>
+                        <button onClick={() => handleDocTypeChange('invoice')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'invoice' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Invoice</button>
+                        <button onClick={() => handleDocTypeChange('quotation')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'quotation' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Quote</button>
+                        <button onClick={() => handleDocTypeChange('po')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'po' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>PO</button>
+                        <button onClick={() => handleDocTypeChange('proforma')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'proforma' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Proforma</button>
                     </div>
                 </div>
 
