@@ -6,7 +6,7 @@ import { ExtractedInvoice, EMPTY_INVOICE } from "../types";
 const HARDCODED_DEFAULTS = {
     url: "http://localhost:11434", 
     model: "qwen3-vl:235b-cloud",
-    key: "d548b1ef316b42cb99b055044c0875b8.AG6A9VHxF-JNyvn1rgmGaeWF"
+    key: "" // Users should provide their own API key via Settings UI
 };
 
 // Prefer user-defined env vars, fallback to hardcoded

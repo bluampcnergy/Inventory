@@ -77,6 +77,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // Security: Only accept messages from our own origin
+      if (event.origin !== window.location.origin) return;
       if (event.data.type === 'COMPANY_ADDED') {
         const newCompany = event.data.company;
         setCompanyProfiles(prev => {
