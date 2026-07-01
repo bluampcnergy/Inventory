@@ -1,183 +1,111 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedInvoice } from "../types";
-
-// Read from Vercel env var (injected by vite.config.ts) — no hardcoded fallback
-const API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-if (!API_KEY) {
-  console.error("GEMINI_API_KEY is not configured. Set it in Vercel environment variables.");
-}
-
-const invoiceSchema = {
-  type: Type.OBJECT,
-  properties: {
-    document_type: { type: Type.STRING, enum: ["invoice", "receipt", "credit_note", "debit_note", "other"] },
-    source_type: { type: Type.STRING, enum: ["sales", "purchase"] },
-    issuer_details: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING },
-        gstin: { type: Type.STRING },
-        address: { type: Type.STRING },
-        state: { type: Type.STRING },
-        state_code: { type: Type.STRING },
-        email: { type: Type.STRING },
-        phone: { type: Type.STRING },
-        contact_person: { type: Type.STRING },
-      },
-    },
-    receiver_details: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING },
-        gstin: { type: Type.STRING },
-        address: { type: Type.STRING },
-        state: { type: Type.STRING },
-        state_code: { type: Type.STRING },
-        email: { type: Type.STRING },
-        phone: { type: Type.STRING },
-        contact_person: { type: Type.STRING },
-      },
-    },
-    invoice_metadata: {
-      type: Type.OBJECT,
-      properties: {
-        invoice_number: { type: Type.STRING },
-        invoice_date: { type: Type.STRING },
-        due_date: { type: Type.STRING },
-        purchase_order_number: { type: Type.STRING },
-        ewaybill_number: { type: Type.STRING },
-        input_tax_credit: { type: Type.STRING, enum: ["set_off", "non_set_off", "not_applicable"], description: "For purchase invoices, determine if ITC is eligible (set_off) or ineligible (non_set_off). Default to set_off." },
-        related_invoice_number: { type: Type.STRING, description: "If document is a credit/debit note, the original invoice number" },
-        note_reason: { type: Type.STRING, description: "Reason for credit/debit note" }
-      },
-    },
-    items: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          description: { type: Type.STRING, description: "Standardized item name. Include technical specs like 32700 6Ah LFP verbatim." },
-          item_type: { type: Type.STRING, description: "Classification: Cell, BMS, Bat-misc. This acts as the Master Item Category." },
-          make_model: { type: Type.STRING, description: "Manufacturer Brand Name only (e.g. EVE, Daly, Pulstron)." },
-          status: { type: Type.STRING, description: "Condition of the item if explicitly mentioned (e.g. 'Damaged', 'Scrap', 'Return'). Default to 'Not Damaged'." },
-          hsn_sac: { type: Type.STRING },
-          quantity: { type: Type.NUMBER },
-          unit_price: { type: Type.NUMBER },
-          taxable_value: { type: Type.NUMBER, description: "Total value BEFORE tax" },
-          cgst_rate: { type: Type.NUMBER },
-          cgst_amount: { type: Type.NUMBER },
-          sgst_rate: { type: Type.NUMBER },
-          sgst_amount: { type: Type.NUMBER },
-          igst_rate: { type: Type.NUMBER },
-          igst_amount: { type: Type.NUMBER },
-          total_value: { type: Type.NUMBER, description: "Total value AFTER tax" },
-        },
-      },
-    },
-    totals: {
-      type: Type.OBJECT,
-      properties: {
-        subtotal_taxable: { type: Type.NUMBER },
-        cgst_total: { type: Type.NUMBER },
-        sgst_total: { type: Type.NUMBER },
-        igst_total: { type: Type.NUMBER },
-        round_off: { type: Type.NUMBER },
-        grand_total: { type: Type.NUMBER },
-        currency: { type: Type.STRING },
-      },
-    },
-    ocr_confidence_score: { type: Type.NUMBER, description: "A number between 0 and 1 indicating confidence" },
-    requires_review: { type: Type.BOOLEAN, description: "True if document is blurry or handwritten" },
-  },
-};
-
-// Helper function to repair truncated JSON
-const repairJSON = (jsonStr: string): string => {
-    let inString = false;
-    let escaped = false;
-    const stack: string[] = [];
-    
-    for (let i = 0; i < jsonStr.length; i++) {
-        const char = jsonStr[i];
-        
-        if (char === '"' && !escaped) {
-            inString = !inString;
-        } else if (!inString) {
-            if (char === '{') stack.push('}');
-            else if (char === '[') stack.push(']');
-            else if (char === '}' || char === ']') {
-                if (stack.length > 0 && stack[stack.length - 1] === char) {
-                    stack.pop();
-                }
-            }
-        }
-        
-        if (char === '\\' && !escaped) escaped = true;
-        else escaped = false;
-    }
-    
-    let repaired = jsonStr;
-    // If cut off inside a string, close it first
-    if (inString) repaired += '"';
-    
-    // Close all open structures
-    while (stack.length > 0) {
-        repaired += stack.pop();
-    }
-    
-    return repaired;
-};
 
 const cleanAndParseJSON = (raw: string) => {
     let text = raw.trim();
-    // Remove markdown code blocks (```json ... ```)
     text = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-    
-    try {
-        return JSON.parse(text);
-    } catch (e) {
-        // Fallback 1: Attempt to repair truncated JSON
-        try {
-            const repaired = repairJSON(text);
-            return JSON.parse(repaired);
-        } catch (e2) {
-            // Fallback 2: Try locating the JSON object boundaries (legacy)
-            const firstOpen = text.indexOf('{');
-            const lastClose = text.lastIndexOf('}');
-            
-            if (firstOpen !== -1 && lastClose !== -1) {
-                const candidate = text.substring(firstOpen, lastClose + 1);
-                try {
-                    // Try repairing the candidate as well in case it was a partial extract
-                    const repairedCandidate = repairJSON(candidate);
-                    return JSON.parse(repairedCandidate);
-                } catch (e3) {
-                    console.error("JSON Parse Recovery Failed. Text:", text);
-                    throw e;
-                }
-            }
-            throw e;
-        }
-    }
+    return JSON.parse(text);
 };
 
 export const extractInvoiceData = async (
-  fileBase64: string,
-  mimeType: string,
-  filename: string
+    fileBase64: string,
+    mimeType: string,
+    filename: string
 ): Promise<ExtractedInvoice> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: API_KEY });
+        const prompt = `You are a highly precise AI assistant that extracts data from invoices, bills, purchase orders, quotes, and proformas into a strictly structured JSON format. ...`; // Kept brief for prompt, the server-side will handle schema if needed. 
+        // Wait, the proxy expects the prompt AND schema to be sent from the client.
+        // Let's send the full prompt and schema to the proxy.
+
+        const invoiceSchema = {
+            type: "object",
+            properties: {
+                document_type: { type: "string", enum: ["invoice", "receipt", "credit_note", "debit_note", "other"] },
+                source_type: { type: "string", enum: ["sales", "purchase"] },
+                issuer_details: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string" },
+                        gstin: { type: "string" },
+                        address: { type: "string" },
+                        state: { type: "string" },
+                        state_code: { type: "string" },
+                        email: { type: "string" },
+                        phone: { type: "string" },
+                        contact_person: { type: "string" }
+                    }
+                },
+                receiver_details: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string" },
+                        gstin: { type: "string" },
+                        address: { type: "string" },
+                        state: { type: "string" },
+                        state_code: { type: "string" },
+                        email: { type: "string" },
+                        phone: { type: "string" },
+                        contact_person: { type: "string" }
+                    }
+                },
+                invoice_metadata: {
+                    type: "object",
+                    properties: {
+                        invoice_number: { type: "string" },
+                        invoice_date: { type: "string" },
+                        due_date: { type: "string" },
+                        purchase_order_number: { type: "string" },
+                        ewaybill_number: { type: "string" },
+                        input_tax_credit: { type: "string", enum: ["set_off", "non_set_off", "not_applicable"] },
+                        related_invoice_number: { type: "string" },
+                        note_reason: { type: "string" }
+                    }
+                },
+                items: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            description: { type: "string" },
+                            item_type: { type: "string", enum: ["Cell", "BMS", "Bat-misc"] },
+                            make_model: { type: "string" },
+                            status: { type: "string" },
+                            hsn_sac: { type: "string" },
+                            quantity: { type: "number" },
+                            unit_price: { type: "number" },
+                            taxable_value: { type: "number" },
+                            cgst_rate: { type: "number" },
+                            cgst_amount: { type: "number" },
+                            sgst_rate: { type: "number" },
+                            sgst_amount: { type: "number" },
+                            igst_rate: { type: "number" },
+                            igst_amount: { type: "number" },
+                            total_value: { type: "number" }
+                        }
+                    }
+                },
+                totals: {
+                    type: "object",
+                    properties: {
+                        subtotal_taxable: { type: "number" },
+                        cgst_total: { type: "number" },
+                        sgst_total: { type: "number" },
+                        igst_total: { type: "number" },
+                        round_off: { type: "number" },
+                        grand_total: { type: "number" },
+                        currency: { type: "string" }
+                    }
+                },
+                ocr_confidence_score: { type: "number" },
+                requires_review: { type: "boolean" }
+            }
+        };
+
+        const fullPrompt = `You are a highly precise AI assistant that extracts data from invoices, bills, purchase orders, quotes, and proformas into a strictly structured JSON format.
+
+        CRITICAL RULES:
         
-        // Prepare Prompt
-        const prompt = `Analyze this document. It is likely an Indian GST invoice.
-        Extract all fields strictly according to the schema.
-        
-        GLOBAL RULES:
-        1. **EXTRACT ALL ITEMS**: You MUST extract every single line item listed in the document's main table. 
-           - Do not summarize. 
-           - Do not skip items. 
+        1. **ITEMS ARRAY**: 
+           - Extract EVERY SINGLE item row into the 'items' array. DO NOT summarize or skip rows.
            - If there are 28 rows, return 28 item objects.
            - Extract items even if they are NOT Cells or BMS (e.g. screws, wires, nickel, transport charges).
         
@@ -200,34 +128,29 @@ export const extractInvoiceData = async (
            - Dates: YYYY-MM-DD.
            - Money: Numbers only (no symbols).
            - Source Type: If issuer is "Datlion Cnergy", 'sales'. If receiver is "Datlion Cnergy", 'purchase'. Default 'purchase'.
-           - ITC: Default 'set_off' for purchases unless blocked.
-        `;
+           - ITC: Default 'set_off' for purchases unless blocked.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: fileBase64
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'extractInvoiceData',
+                payload: {
+                    fileBase64,
+                    mimeType,
+                    prompt: fullPrompt,
+                    schema: invoiceSchema
                 }
-              },
-              { text: prompt }
-            ]
-          },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: invoiceSchema,
-            temperature: 0.1,
-            maxOutputTokens: 8192,
-          },
+            })
         });
 
-        let text = response.text;
-        if (!text) throw new Error("No response from AI");
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to extract invoice');
+        }
 
-        const parsedData = cleanAndParseJSON(text);
+        const data = await response.json();
+        const parsedData = cleanAndParseJSON(data.text);
 
         return {
           ...parsedData,
@@ -237,24 +160,28 @@ export const extractInvoiceData = async (
         };
     } catch (error: any) {
         console.error("Gemini Extraction Error:", error);
-        let errorMessage = error.message;
-        throw new Error(`Gemini Extraction Failed: ${errorMessage}`);
+        throw new Error(`Gemini Extraction Failed: ${error.message}`);
     }
 };
 
 export const generateTextResponse = async (prompt: string): Promise<string> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: API_KEY });
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: { 
-                temperature: 0.7,
-                maxOutputTokens: 2048 
-            }
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'generateTextResponse',
+                payload: { prompt }
+            })
         });
-        
-        return response.text || "No response generated.";
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to generate text');
+        }
+
+        const data = await response.json();
+        return data.text || "No response generated.";
     } catch (error: any) {
         console.error("Gemini Text Error:", error);
         return `Error: ${error.message}`;
@@ -262,55 +189,55 @@ export const generateTextResponse = async (prompt: string): Promise<string> => {
 };
 
 const aiAssistantSchema = {
-  type: Type.OBJECT,
-  properties: {
-    document_type: { type: Type.STRING, enum: ["invoice", "po", "quotation", "proforma"] },
-    template_name: { type: Type.STRING, nullable: true },
-    company_match: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING },
-        is_new_company: { type: Type.BOOLEAN }
-      }
-    },
-    items: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
+    type: "object",
+    properties: {
+      document_type: { type: "string", enum: ["invoice", "po", "quotation", "proforma"] },
+      template_name: { type: "string", nullable: true },
+      company_match: {
+        type: "object",
         properties: {
-          description: { type: Type.STRING },
-          quantity: { type: Type.NUMBER },
-          unit_price: { type: Type.NUMBER },
-          is_custom_product: { type: Type.BOOLEAN }
+          name: { type: "string" },
+          is_new_company: { type: "boolean" }
         }
-      }
-    },
-    ui_options: {
-      type: Type.OBJECT,
-      properties: {
-        showReceiverSign: { type: Type.BOOLEAN, nullable: true },
-        showQRCode: { type: Type.BOOLEAN, nullable: true },
-        showTotalsTable: { type: Type.BOOLEAN, nullable: true },
-        showTaxTable: { type: Type.BOOLEAN, nullable: true },
-        terms: { type: Type.STRING, nullable: true },
-        visibleColumns: {
-          type: Type.OBJECT,
+      },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
           properties: {
-            index: { type: Type.BOOLEAN, nullable: true },
-            description: { type: Type.BOOLEAN, nullable: true },
-            hsn: { type: Type.BOOLEAN, nullable: true },
-            quantity: { type: Type.BOOLEAN, nullable: true },
-            rate: { type: Type.BOOLEAN, nullable: true },
-            discount: { type: Type.BOOLEAN, nullable: true },
-            taxableValue: { type: Type.BOOLEAN, nullable: true },
-            total: { type: Type.BOOLEAN, nullable: true }
+            description: { type: "string" },
+            quantity: { type: "number" },
+            unit_price: { type: "number" },
+            is_custom_product: { type: "boolean" }
+          }
+        }
+      },
+      ui_options: {
+        type: "object",
+        properties: {
+          showReceiverSign: { type: "boolean", nullable: true },
+          showQRCode: { type: "boolean", nullable: true },
+          showTotalsTable: { type: "boolean", nullable: true },
+          showTaxTable: { type: "boolean", nullable: true },
+          terms: { type: "string", nullable: true },
+          visibleColumns: {
+            type: "object",
+            properties: {
+              index: { type: "boolean", nullable: true },
+              description: { type: "boolean", nullable: true },
+              hsn: { type: "boolean", nullable: true },
+              quantity: { type: "boolean", nullable: true },
+              rate: { type: "boolean", nullable: true },
+              discount: { type: "boolean", nullable: true },
+              taxableValue: { type: "boolean", nullable: true },
+              total: { type: "boolean", nullable: true }
+            }
           }
         }
       }
     }
-  }
-};
-
+  };
+  
 export const generateInvoiceFromText = async (
     prompt: string, 
     context: {
@@ -320,8 +247,6 @@ export const generateInvoiceFromText = async (
     }
 ): Promise<any> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: API_KEY });
-        
         const systemPrompt = `You are an AI Invoice Assistant for the Datlion Cnergy Plant OS. Your job is to translate a user's natural language request into a strict JSON payload that will be used to automatically fill out an Invoice/Quotation form.
 
 You will be provided with the following SYSTEM CONTEXT (data currently in the database):
@@ -349,20 +274,25 @@ Follow these strict rules:
 
 User Request: "${prompt}"`;
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: systemPrompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: aiAssistantSchema,
-                temperature: 0.1,
-            },
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'generateInvoiceFromText',
+                payload: {
+                    prompt: systemPrompt,
+                    schema: aiAssistantSchema
+                }
+            })
         });
 
-        let text = response.text;
-        if (!text) throw new Error("No response from AI");
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to process AI assistant request');
+        }
 
-        return cleanAndParseJSON(text);
+        const data = await response.json();
+        return cleanAndParseJSON(data.text);
     } catch (error: any) {
         console.error("Gemini AI Assistant Error:", error);
         throw new Error(`AI Assistant Failed: ${error.message}`);

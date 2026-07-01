@@ -1,30 +1,30 @@
-import { ExtractedInvoice, EMPTY_INVOICE } from "../types";
+import { ExtractedInvoice } from "../types";
 
-// Read from Vercel env var (injected by vite.config.ts)
-const DEFAULT_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || "";
-const DEFAULT_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free";
+const EMPTY_INVOICE: Partial<ExtractedInvoice> = {
+  document_type: "invoice",
+  source_type: "purchase",
+  issuer_details: { name: "", gstin: "", address: "", state: "", state_code: "", email: "", phone: "", contact_person: "" },
+  receiver_details: { name: "", gstin: "", address: "", state: "", state_code: "", email: "", phone: "", contact_person: "" },
+  invoice_metadata: { invoice_number: "", invoice_date: "", due_date: "", purchase_order_number: "", ewaybill_number: "", input_tax_credit: "set_off", related_invoice_number: "", note_reason: "" },
+  items: [],
+  totals: { subtotal_taxable: 0, cgst_total: 0, sgst_total: 0, igst_total: 0, round_off: 0, grand_total: 0, currency: "INR" },
+};
 
 export const extractInvoiceDataOpenRouter = async (
   fileBase64: string,
   mimeType: string,
   filename: string,
-  apiKey?: string,
+  apiKey?: string, // Deprecated, kept for signature compatibility
   model?: string
 ): Promise<ExtractedInvoice> => {
-  const key = apiKey || DEFAULT_API_KEY;
-  const modelName = model || DEFAULT_MODEL;
+  const prompt = `You are a highly precise AI assistant that extracts data from invoices, bills, purchase orders, quotes, and proformas into a strictly structured JSON format. ...`; // Full prompt sent via frontend, backend handles generic routing. Wait, the frontend sends the prompt to the backend.
 
-  if (!key) {
-    throw new Error("OpenRouter API Key is not configured. Please set it in Vercel environment variables or inside Settings.");
-  }
+  const fullPrompt = `You are a highly precise AI assistant that extracts data from invoices, bills, purchase orders, quotes, and proformas into a strictly structured JSON format.
 
-  const prompt = `Analyze this document. It is likely an Indian GST invoice.
-Extract all fields strictly in JSON format. Your response MUST be valid JSON only. Do not wrap it in markdown formatting (like \`\`\`json) or include any extra text.
+CRITICAL RULES:
 
-GLOBAL RULES:
-1. **EXTRACT ALL ITEMS**: You MUST extract every single line item listed in the document's main table. 
-   - Do not summarize. 
-   - Do not skip items. 
+1. **ITEMS ARRAY**: 
+   - Extract EVERY SINGLE item row into the 'items' array. DO NOT summarize or skip rows.
    - If there are 28 rows, return 28 item objects.
    - Extract items even if they are NOT Cells or BMS (e.g. screws, wires, nickel, transport charges).
 
@@ -117,41 +117,23 @@ Return a JSON object matching this schema exactly:
 `;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
-        "X-Title": "Datlion Cnergy Plant OS"
-      },
+    const response = await fetch('/api/openrouter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: modelName,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType};base64,${fileBase64}`
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0.1
+        action: 'extractInvoiceData',
+        payload: {
+          prompt: fullPrompt,
+          fileBase64,
+          mimeType,
+          model
+        }
       })
     });
 
     if (!response.ok) {
-      let errorBody = "";
-      try { errorBody = await response.text(); } catch (e) { errorBody = "Unknown error"; }
-      throw new Error(`OpenRouter Error (${response.status}): ${response.statusText}. Details: ${errorBody}.`);
+      const err = await response.json();
+      throw new Error(`OpenRouter Error: ${err.error || 'Unknown Error'}`);
     }
 
     const data = await response.json();
@@ -218,7 +200,7 @@ Return a JSON object matching this schema exactly:
       ...parsedData,
       filename,
       timestamp: new Date().toISOString(),
-      raw_text: `Extracted via OpenRouter (${modelName})`,
+      raw_text: `Extracted via OpenRouter`,
       ocr_confidence_score: parsedData.ocr_confidence_score || 0.9,
     };
 
@@ -232,36 +214,24 @@ export const testOpenRouterConnection = async (
   apiKey?: string,
   model?: string
 ): Promise<{ success: boolean; message: string }> => {
-  const key = apiKey || DEFAULT_API_KEY;
-  const modelName = model || DEFAULT_MODEL;
-
-  if (!key) {
-    return { success: false, message: "OpenRouter API Key is not configured." };
-  }
-
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-      },
+    const response = await fetch('/api/openrouter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: modelName,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 5
+        action: 'testConnection',
+        payload: { model }
       })
     });
 
     if (response.ok) {
-      return { success: true, message: "Connection to OpenRouter successful!" };
+      return { success: true, message: "Connection to OpenRouter successful via proxy!" };
     }
 
-    let errorBody = "";
-    try { errorBody = await response.text(); } catch (e) { errorBody = ""; }
-    return { success: false, message: `Server reached but returned error: ${response.status} ${response.statusText}. ${errorBody}` };
+    const err = await response.json();
+    return { success: false, message: `Server reached but returned error: ${err.error}` };
   } catch (error: any) {
-    return { success: false, message: `Network error connecting to OpenRouter: ${error.message}` };
+    return { success: false, message: `Network error connecting to OpenRouter proxy: ${error.message}` };
   }
 };
 
@@ -270,30 +240,19 @@ export const generateTextResponseOpenRouter = async (
   apiKey?: string,
   model?: string
 ): Promise<string> => {
-  const key = apiKey || DEFAULT_API_KEY;
-  const modelName = model || DEFAULT_MODEL;
-
-  if (!key) {
-    throw new Error("OpenRouter API Key is not configured.");
-  }
-
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-      },
+    const response = await fetch('/api/openrouter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: modelName,
-        messages: [{ role: "user", content: prompt }],
+        action: 'generateTextResponse',
+        payload: { prompt, model }
       })
     });
 
     if (!response.ok) {
-      let errorBody = "";
-      try { errorBody = await response.text(); } catch (e) { errorBody = ""; }
-      throw new Error(`OpenRouter Error (${response.status}): ${errorBody || response.statusText}`);
+      const err = await response.json();
+      throw new Error(`OpenRouter Proxy Error: ${err.error}`);
     }
     const data = await response.json();
     return data.choices?.[0]?.message?.content || "No response.";

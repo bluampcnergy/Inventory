@@ -67,7 +67,6 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
     const [ollamaKey, setOllamaKey] = useState("");
 
     // OpenRouter Config State
-    const [openRouterKey, setOpenRouterKey] = useState("");
     const [openRouterModel, setOpenRouterModel] = useState("nvidia/nemotron-nano-12b-v2-vl:free");
     const [openRouterStatus, setOpenRouterStatus] = useState<{ success?: boolean; message?: string } | null>(null);
     const [isTestingOpenRouter, setIsTestingOpenRouter] = useState(false);
@@ -178,7 +177,7 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                 );
             } else if (aiProvider === 'openrouter') {
                 extracted = await extractInvoiceDataOpenRouter(
-                    base64Data, mimeType, job.file.name, openRouterKey, openRouterModel
+                    base64Data, mimeType, job.file.name, undefined, openRouterModel
                 );
             } else {
                 // Gemini (Uses hardcoded API KEY in service)
@@ -426,16 +425,13 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                                                         <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Model Name</label>
                                                         <input className="w-full text-xs p-1.5 border rounded" value={openRouterModel} onChange={e => setOpenRouterModel(e.target.value)} />
                                                     </div>
-                                                    <div>
-                                                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">API Key</label>
-                                                        <input className="w-full text-xs p-1.5 border rounded" type="password" placeholder={process.env.OPENROUTER_API_KEY ? "Using Vercel Env Var" : "Enter API Key"} value={openRouterKey} onChange={e => setOpenRouterKey(e.target.value)} />
                                                     </div>
                                                     <button
                                                         onClick={async () => {
                                                             setIsTestingOpenRouter(true);
                                                             setOpenRouterStatus(null);
                                                             try {
-                                                                const res = await testOpenRouterConnection(openRouterKey, openRouterModel);
+                                                                const res = await testOpenRouterConnection(undefined, openRouterModel);
                                                                 setOpenRouterStatus(res);
                                                             } catch (err: any) {
                                                                 setOpenRouterStatus({ success: false, message: err.message });

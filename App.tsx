@@ -136,8 +136,19 @@ const App: React.FC = () => {
            });
         }
         
-        // Remove plaintext password from local storage
-        setCurrentUser(prev => prev ? { ...prev, password: 'migrated_to_supabase' } : null);
+        // Ensure they actually get signed in
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: currentUser.username,
+          password: currentUser.password
+        });
+        
+        if (signInErr) {
+            // Probably email confirmation required. They need to log in manually to see the error.
+            setCurrentUser(null);
+        } else {
+            // Remove plaintext password from local storage
+            setCurrentUser(prev => prev ? { ...prev, password: 'migrated_to_supabase' } : null);
+        }
       }
     };
     
@@ -182,6 +193,15 @@ const App: React.FC = () => {
 
         if (signUpError && !signUpError.message.includes('already registered')) {
            return signUpError.message;
+        }
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: username,
+            password
+        });
+
+        if (signInError) {
+            return `Migration started, but login failed: ${signInError.message}. (IMPORTANT: Please go to your Supabase Dashboard -> Authentication -> Providers -> Email, and DISABLE 'Confirm email'. Then try logging in again.)`;
         }
 
         setCurrentUser({ username, role: legacyUser.role || 'user', password: 'migrated_to_supabase' });
