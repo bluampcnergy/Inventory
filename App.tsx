@@ -116,6 +116,34 @@ const App: React.FC = () => {
     });
   }, [setUsers, users]); 
 
+  // Seamless migration from localStorage to Supabase Auth
+  useEffect(() => {
+    const migrateExistingSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // If user has local storage session but no Supabase session, try to migrate them
+      if (currentUser && currentUser.password && currentUser.password !== 'migrated_to_supabase' && !session) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: currentUser.username,
+          password: currentUser.password
+        });
+        
+        if (error && error.message.includes('Invalid login')) {
+           // Try sign up if they don't exist yet
+           await supabase.auth.signUp({
+             email: currentUser.username,
+             password: currentUser.password
+           });
+        }
+        
+        // Remove plaintext password from local storage
+        setCurrentUser(prev => prev ? { ...prev, password: 'migrated_to_supabase' } : null);
+      }
+    };
+    
+    migrateExistingSession();
+  }, [currentUser, setCurrentUser]);
+
   const addLogEntry = useCallback((action: string, details: string) => {
     if (!currentUser) return;
     const newLog: LogEntry = {
@@ -129,19 +157,49 @@ const App: React.FC = () => {
   }, [setLogs, currentUser]);
 
   const handleLogin = async (username: string, password: string): Promise<string | null> => {
-    const user = users.find(u => u.username === username);
-    if (user && user.password === password) {
-      setCurrentUser(user);
-      addLogEntry('User Logged In', `User '${username}' logged in.`);
-      return null;
+    try {
+      // 1. Try standard Supabase Auth first
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: username,
+        password,
+      });
+
+      if (!error && data.session) {
+        const userRec = users.find(u => u.username === username);
+        setCurrentUser({ username, role: userRec?.role || 'user', password: 'migrated_to_supabase' });
+        addLogEntry('User Logged In', `User '${username}' logged in via Supabase Auth.`);
+        return null;
+      }
+
+      // 2. Fallback: Seamless Migration for Legacy Users
+      const legacyUser = users.find(u => u.username === username);
+      if (legacyUser && legacyUser.password === password) {
+        // Valid legacy credentials, migrate them to Supabase
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: username,
+          password,
+        });
+
+        if (signUpError && !signUpError.message.includes('already registered')) {
+           return signUpError.message;
+        }
+
+        setCurrentUser({ username, role: legacyUser.role || 'user', password: 'migrated_to_supabase' });
+        addLogEntry('User Migrated', `Legacy user '${username}' seamlessly migrated to Supabase Auth.`);
+        return null;
+      }
+
+      return error?.message || 'Invalid username or password.';
+    } catch (err: any) {
+      return err.message;
     }
-    return 'Invalid username or password.';
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if(currentUser) {
       addLogEntry('User Logged Out', `User '${currentUser.username}' logged out.`);
     }
+    await supabase.auth.signOut();
     setCurrentUser(null);
   };
   
@@ -153,6 +211,8 @@ const App: React.FC = () => {
     if (userExists) {
         return 'A user with this email already exists.';
     }
+    // We add to app_users so their role is tracked. 
+    // They will be seamlessly migrated to Supabase Auth upon first login.
     const newUser: User = { username, password, role: 'user' };
     setUsers(prev => [...prev, newUser]);
     addLogEntry('User Created', `Admin '${currentUser.username}' created new user '${username}'.`);
