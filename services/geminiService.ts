@@ -192,7 +192,7 @@ const aiAssistantSchema = {
     type: "object",
     properties: {
       document_type: { type: "string", enum: ["invoice", "po", "quotation", "proforma"] },
-      template_name: { type: "string", nullable: true },
+      template_name: { type: "string" },
       company_match: {
         type: "object",
         properties: {
@@ -215,22 +215,22 @@ const aiAssistantSchema = {
       ui_options: {
         type: "object",
         properties: {
-          showReceiverSign: { type: "boolean", nullable: true },
-          showQRCode: { type: "boolean", nullable: true },
-          showTotalsTable: { type: "boolean", nullable: true },
-          showTaxTable: { type: "boolean", nullable: true },
-          terms: { type: "string", nullable: true },
+          showReceiverSign: { type: "boolean" },
+          showQRCode: { type: "boolean" },
+          showTotalsTable: { type: "boolean" },
+          showTaxTable: { type: "boolean" },
+          terms: { type: "string" },
           visibleColumns: {
             type: "object",
             properties: {
-              index: { type: "boolean", nullable: true },
-              description: { type: "boolean", nullable: true },
-              hsn: { type: "boolean", nullable: true },
-              quantity: { type: "boolean", nullable: true },
-              rate: { type: "boolean", nullable: true },
-              discount: { type: "boolean", nullable: true },
-              taxableValue: { type: "boolean", nullable: true },
-              total: { type: "boolean", nullable: true }
+              index: { type: "boolean" },
+              description: { type: "boolean" },
+              hsn: { type: "boolean" },
+              quantity: { type: "boolean" },
+              rate: { type: "boolean" },
+              discount: { type: "boolean" },
+              taxableValue: { type: "boolean" },
+              total: { type: "boolean" }
             }
           }
         }

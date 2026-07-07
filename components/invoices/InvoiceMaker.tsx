@@ -527,6 +527,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         setLogo(loadedConfig.logoUrl || null);
         setStamp(loadedConfig.stampUrl || null);
         setSignature(loadedConfig.signatureUrl || null);
+
+        if (loadedConfig.visibleColumns) setVisibleColumns(loadedConfig.visibleColumns);
+        if (loadedConfig.billedToLabel) setBilledToLabel(loadedConfig.billedToLabel);
+        if (loadedConfig.shippedToLabel) setShippedToLabel(loadedConfig.shippedToLabel);
         if (loadedConfig.issuer_details) {
             setDoc(prev => {
                 const updatedIssuer = { ...loadedConfig.issuer_details! };
