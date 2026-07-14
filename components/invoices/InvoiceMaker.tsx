@@ -80,6 +80,11 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const [signature, setSignature] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Document Search State
+    const [searchDocTerm, setSearchDocTerm] = useState('');
+    const [docSearchResults, setDocSearchResults] = useState<ExtractedInvoice[]>([]);
+    const [isSearchingDoc, setIsSearchingDoc] = useState(false);
+
     // Visibility States
     const currencySymbol = getCurrencySymbol(doc.totals?.currency);
     const [showNoteSection, setShowNoteSection] = useState(false);
@@ -505,6 +510,38 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             setSelectedTemplateId('');
             fetchTemplates();
         }
+    };
+
+    // Document Search Functions
+    const handleDocSearch = async (term: string) => {
+        setSearchDocTerm(term);
+        if (term.length < 2) {
+            setDocSearchResults([]);
+            return;
+        }
+        setIsSearchingDoc(true);
+        const { data, error } = await supabase
+            .from('extracted_invoices')
+            .select('*')
+            .or(`invoice_metadata->>invoice_number.ilike.%${term}%,receiver_details->>name.ilike.%${term}%,issuer_details->>name.ilike.%${term}%`)
+            .order('created_at', { ascending: false })
+            .limit(10);
+        
+        if (data && !error) {
+            setDocSearchResults(data);
+        }
+        setIsSearchingDoc(false);
+    };
+
+    const loadPreviousDocument = (selectedDoc: ExtractedInvoice) => {
+        if (!confirm("This will overwrite your current invoice data. Proceed?")) return;
+        setDoc(selectedDoc);
+        if (selectedDoc.document_type) {
+            setDocType(selectedDoc.document_type as any);
+            setCustomTitle(selectedDoc.document_type === 'invoice' ? 'INVOICE' : selectedDoc.document_type === 'po' ? 'PURCHASE ORDER' : selectedDoc.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+        }
+        setSearchDocTerm('');
+        setDocSearchResults([]);
     };
 
     const loadTemplate = (tmpl: InvoiceTemplate) => {
@@ -1108,6 +1145,41 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                     </div>
 
                     <div className="flex gap-2"><input className="flex-1 text-sm p-2 border rounded" placeholder="New template name" value={templateName} onChange={e => setTemplateName(e.target.value)} /><button onClick={saveTemplate} className="p-2 bg-slate-200 rounded hover:bg-slate-300"><Save size={16} /></button></div>
+                </div>
+
+                {/* Search Previous Document */}
+                <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Search Previous Document</span>
+                        <ImportIcon size={14} className="text-slate-400" />
+                    </div>
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            className="w-full text-sm p-2 border rounded outline-none focus:border-[#8EBF45]" 
+                            placeholder="Search by invoice # or name..."
+                            value={searchDocTerm}
+                            onChange={(e) => handleDocSearch(e.target.value)}
+                        />
+                        {isSearchingDoc && <Loader2 size={16} className="absolute right-3 top-2.5 animate-spin text-slate-400" />}
+                        {docSearchResults.length > 0 && (
+                            <ul className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                {docSearchResults.map((res, i) => (
+                                    <li 
+                                        key={res.id || i} 
+                                        className="p-2 border-b last:border-b-0 hover:bg-slate-50 cursor-pointer text-xs"
+                                        onClick={() => loadPreviousDocument(res)}
+                                    >
+                                        <div className="font-bold text-slate-700">{res.invoice_metadata?.invoice_number || 'No Number'}</div>
+                                        <div className="text-slate-500 flex justify-between">
+                                            <span>{res.receiver_details?.name || 'Unknown'}</span>
+                                            <span>{getCurrencySymbol(res.totals?.currency)} {(res.totals?.grand_total || 0).toFixed(2)}</span>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
                 </div>
 
                 <div className="mb-6 space-y-3 border-b pb-6">
