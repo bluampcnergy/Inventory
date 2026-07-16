@@ -198,17 +198,23 @@ const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({ invoice, invoices, 
                     #invoice-print-overlay > .print-toolbar { display: none !important; }
                     #invoice-print-overlay > .print-scroll-area { overflow: visible !important; background: white !important; padding: 0 !important; }
                     @page { size: A4; margin: 0; }
+                    html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
                     .invoice-print-page {
                         page-break-after: always;
-                        width: 210mm;
-                        min-height: 296mm;
-                        max-height: 296mm;
+                        page-break-inside: avoid;
+                        width: 210mm !important;
+                        height: 297mm !important;
+                        min-height: 297mm !important;
+                        max-height: 297mm !important;
+                        margin: 0 !important;
                         padding: 8mm;
                         box-sizing: border-box;
                         position: relative;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
+                        border: none !important;
+                        box-shadow: none !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                     }

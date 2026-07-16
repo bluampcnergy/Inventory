@@ -231,38 +231,21 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, setView, onEditInvoi
         if (selected.length === 0) return;
 
         setBulkDownloading(true);
-        setBulkProgress({ current: 0, total: selected.length });
         setBulkInvoices(selected);
         
         // Give InvoicePrintView time to render all invoices
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        try {
-            const container = document.querySelector('#invoice-print-overlay .invoice-print-container');
-            if (!container) {
-                console.warn(`Could not find print container for bulk download`);
-                throw new Error("Print container not found");
-            }
-
-            const filename = `Bulk_Invoices_${new Date().toISOString().split('T')[0]}.pdf`;
-
-            const opt = {
-                margin: 0,
-                filename,
-                image: { type: 'jpeg' as const, quality: 0.95 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-                pagebreak: { mode: 'css' }
-            };
-
-            await html2pdf().set(opt).from(container).save();
-        } catch (err) {
-            console.error(`Failed to generate bulk PDF:`, err);
-        }
-
-        setBulkInvoices(null);
-        setBulkDownloading(false);
-        setBulkProgress({ current: 0, total: 0 });
+        // Use native window.print() instead of html2pdf for bulk
+        // This is much faster, avoids memory crashes, and perfectly generates one single PDF file.
+        window.print();
+        
+        // Clean up
+        setTimeout(() => {
+            setBulkInvoices(null);
+            setBulkDownloading(false);
+            setBulkProgress({ current: 0, total: 0 });
+        }, 1000);
     };
 
     const handleSendMail = async (inv: ExtractedInvoice) => {
