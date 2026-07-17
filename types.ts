@@ -30,7 +30,7 @@ export interface PriceListItem {
 export interface User {
   username: string;
   password?: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'billing';
 }
 
 export interface LogEntry {

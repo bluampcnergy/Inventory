@@ -7,7 +7,7 @@ import Modal from './Modal';
 
 interface UserManagementProps {
   users: User[];
-  onAddUser: (username: string, password: string) => string | null;
+  onAddUser: (username: string, password: string, role?: User['role']) => string | null;
   onDeleteUser: (username: string) => string | null;
   currentUser: User;
 }
@@ -16,6 +16,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<User['role']>('user');
   const [error, setError] = useState<string | null>(null);
 
   const handleAddUserSubmit = (e: React.FormEvent) => {
@@ -25,13 +26,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       setError("Username and password cannot be empty.");
       return;
     }
-    const result = onAddUser(username, password);
+    const result = onAddUser(username, password, role);
     if (result) {
       setError(result);
     } else {
       setIsModalOpen(false);
       setUsername('');
       setPassword('');
+      setRole('user');
     }
   };
   
@@ -47,7 +49,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
         <button
-          onClick={() => { setIsModalOpen(true); setError(null); setUsername(''); setPassword(''); }}
+          onClick={() => { setIsModalOpen(true); setError(null); setUsername(''); setPassword(''); setRole('user'); }}
           className="flex items-center bg-[#8EBF45] text-[#0D0D0D] px-4 py-2 rounded-lg shadow-md hover:bg-[#658C3E] hover:text-white transition-colors font-black uppercase tracking-wide text-xs"
         >
           <PlusIcon />
@@ -69,8 +71,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
               <tr key={user.username} className="hover:bg-gray-50">
                 <td className="p-4">{user.username}</td>
                 <td className="p-4">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-[#8EBF45]/20 text-[#658C3E]' : 'bg-gray-100 text-gray-800'}`}>
-                        {user.role === 'admin' ? 'Director Admin' : 'General Employee'}
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-[#8EBF45]/20 text-[#658C3E]' : user.role === 'billing' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {user.role === 'admin' ? 'Director Admin' : user.role === 'billing' ? 'Billing & Operations' : 'General Employee'}
                     </span>
                 </td>
                 <td className="p-4 text-right">
@@ -123,7 +125,18 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
               required 
             />
           </div>
-           <p className="text-sm text-gray-500">New users will be created with the 'General Employee' role.</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Role</label>
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value as User['role'])}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"
+            >
+              <option value="user">General Employee</option>
+              <option value="billing">Billing & Operations (Can access Dashboard Data in Tools)</option>
+              <option value="admin">Director Admin</option>
+            </select>
+          </div>
           <div className="flex justify-end pt-4">
             <button type="submit" className="bg-[#8EBF45] text-[#0D0D0D] px-4 py-2 rounded-lg hover:bg-[#658C3E] hover:text-white font-bold uppercase tracking-wide text-xs">Create User</button>
           </div>

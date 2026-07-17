@@ -238,7 +238,7 @@ const App: React.FC = () => {
     setCurrentUser(null);
   };
   
-  const handleAddUser = (username: string, password: string): string | null => {
+  const handleAddUser = (username: string, password: string, role: User['role'] = 'user'): string | null => {
     if (currentUser?.role !== 'admin') {
         return 'Permission denied.';
     }
@@ -248,7 +248,7 @@ const App: React.FC = () => {
     }
     // We add to app_users so their role is tracked. 
     // They will be seamlessly migrated to Supabase Auth upon first login.
-    const newUser: User = { username, password, role: 'user' };
+    const newUser: User = { username, password, role };
     setUsers(prev => [...prev, newUser]);
     addLogEntry('User Created', `Admin '${currentUser.username}' created new user '${username}'.`);
     return null;

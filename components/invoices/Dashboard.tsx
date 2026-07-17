@@ -174,7 +174,7 @@ const NoteModal: React.FC<NoteModalProps> = ({ isOpen, onClose, parentInvoice, o
 };
 
 interface DashboardProps {
-    currentUser: { username: string; role: 'admin' | 'user' } | null;
+    currentUser: { username: string; role: 'admin' | 'user' | 'billing' } | null;
     setView?: (view: any) => void;
     onEditInvoice?: (invoice: ExtractedInvoice) => void;
 }
