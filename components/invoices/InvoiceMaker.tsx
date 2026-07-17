@@ -40,10 +40,20 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
 };
 
 const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, companyProfiles = [], initialData, priceList = [], finishedGoods = [], recipes = [] }) => {
-    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation' | 'proforma'>('invoice');
-    const [customTitle, setCustomTitle] = useState('INVOICE');
+    // Load draft from local storage if not editing an existing record
+    const draft = useMemo(() => {
+        if (initialData?.id) return null;
+        try {
+            const stored = localStorage.getItem('invoice_maker_draft');
+            if (stored) return JSON.parse(stored);
+        } catch(e) {}
+        return null;
+    }, [initialData]);
+
+    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation' | 'proforma'>(draft?.docType || 'invoice');
+    const [customTitle, setCustomTitle] = useState(draft?.customTitle || 'INVOICE');
     const [doc, setDoc] = useState<ExtractedInvoice>(() => {
-        const base = initialData || EMPTY_INVOICE;
+        const base = initialData || draft?.doc || EMPTY_INVOICE;
         return { 
             ...EMPTY_INVOICE,
             ...base, 
@@ -62,7 +72,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     });
 
     // Default config with showReceiverSign
-    const [config, setConfig] = useState<ExtendedConfig>({
+    const [config, setConfig] = useState<ExtendedConfig>(draft?.config || {
         font: 'font-sans',
         color: '#000000',
         headerText: '',
@@ -90,11 +100,11 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const [showNoteSection, setShowNoteSection] = useState(false);
 
     // Editable labels for Billed To / Shipped To
-    const [billedToLabel, setBilledToLabel] = useState('Billed To');
-    const [shippedToLabel, setShippedToLabel] = useState('Shipped To');
+    const [billedToLabel, setBilledToLabel] = useState(draft?.billedToLabel || 'Billed To');
+    const [shippedToLabel, setShippedToLabel] = useState(draft?.shippedToLabel || 'Shipped To');
 
     // Total visibility control for all columns
-    const [visibleColumns, setVisibleColumns] = useState({
+    const [visibleColumns, setVisibleColumns] = useState(draft?.visibleColumns || {
         index: true,
         description: true,
         image: false,
@@ -109,9 +119,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const [showColumnMenu, setShowColumnMenu] = useState(false);
     const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
     const [templateName, setTemplateName] = useState('');
-    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [selectedTemplateId, setSelectedTemplateId] = useState(draft?.selectedTemplateId || '');
     const [amountInWordsStr, setAmountInWordsStr] = useState('');
-    const [printMode, setPrintMode] = useState<'single' | 'dual'>('dual');
+    const [printMode, setPrintMode] = useState<'single' | 'dual'>(draft?.printMode || 'dual');
 
     // Smart Pricing autocomplete state
     const [priceDropdownIdx, setPriceDropdownIdx] = useState<number | null>(null);
@@ -144,6 +154,20 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const [pendingAiData, setPendingAiData] = useState<any>(null);
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [isReadyToApply, setIsReadyToApply] = useState(false);
+
+    // Persist draft to localStorage automatically
+    useEffect(() => {
+        if (initialData?.id || doc.id) return; // Don't persist if editing a saved record
+        const timer = setTimeout(() => {
+            const dataToSave = {
+                docType, customTitle, doc, config, billedToLabel, shippedToLabel, visibleColumns, selectedTemplateId, printMode
+            };
+            try {
+                localStorage.setItem('invoice_maker_draft', JSON.stringify(dataToSave));
+            } catch(e) {}
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [docType, customTitle, doc, config, billedToLabel, shippedToLabel, visibleColumns, selectedTemplateId, printMode, initialData?.id, doc.id]);
 
     useEffect(() => {
         let timer: any;
@@ -879,6 +903,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             const { error: insertError } = await supabase.from('invoices').insert([cleanRecord]);
             if (insertError) throw insertError;
 
+            try { localStorage.removeItem('invoice_maker_draft'); } catch (e) {}
             alert("Document saved to Dashboard!");
         } catch (error: any) {
             alert("Error saving record: " + error.message);
@@ -1422,6 +1447,11 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                         <button onClick={handlePrint} className="flex-1 bg-[#0D0D0D] text-white py-2 rounded shadow hover:bg-[#404040] flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide"><Printer size={16} /> Print</button>
                         <button onClick={handlePrint} className="flex-1 bg-[#8EBF45] text-[#0D0D0D] py-2 rounded shadow hover:bg-[#658C3E] hover:text-white flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide"><Download size={16} /> PDF</button>
                     </div>
+                    {!initialData?.id && (
+                        <button onClick={() => { if(confirm('Are you sure you want to clear your current draft?')) { try { localStorage.removeItem('invoice_maker_draft'); window.location.reload(); } catch(e){} } }} className="w-full text-xs text-red-500 hover:text-red-600 mt-2 font-bold underline underline-offset-2">
+                            Clear Draft & Start Fresh
+                        </button>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-slate-500 font-semibold">Copies:</span>
                         <button
