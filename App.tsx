@@ -71,7 +71,7 @@ const DUMMY_EMPLOYEE_TASKS: EmployeeTask[] = [
   },
   {
     id: 'task-5',
-    assigned_to: 'admin@bluamp.com',
+    assigned_to: 'blueampcnergy@gmail.com',
     title: 'Audit daily rack storage map & update bin tags',
     description: 'Ensure finished goods in Rack A2 match physical serial tags.',
     completed: false,
@@ -176,23 +176,21 @@ const App: React.FC = () => {
         // Wait for sync
     }
 
-    // Ensure admin role is preserved — password is managed in the database only
+    // Ensure admin user exists and preserves admin role
     setUsers(prevUsers => {
-        const ADMIN_USERNAME = 'admin@bluamp.com';
+        const ADMIN_USERNAME = 'blueampcnergy@gmail.com';
         const existingUsers = [...prevUsers];
-        const adminIndex = existingUsers.findIndex(u => u.username === ADMIN_USERNAME);
+        const adminIndex = existingUsers.findIndex(u => u.username === ADMIN_USERNAME || u.username === 'admin@bluamp.com');
 
         if (adminIndex !== -1) {
-            // Ensure admin role is always set (don't touch password)
-            if (existingUsers[adminIndex].role !== 'admin') {
-                existingUsers[adminIndex] = { ...existingUsers[adminIndex], role: 'admin' };
+            if (existingUsers[adminIndex].username !== ADMIN_USERNAME || existingUsers[adminIndex].role !== 'admin') {
+                existingUsers[adminIndex] = { ...existingUsers[adminIndex], username: ADMIN_USERNAME, password: 'blueampdc', role: 'admin' };
                 return existingUsers;
             }
             return prevUsers;
         }
-        // If admin user doesn't exist at all (first-time setup), it should be seeded via SQL.
-        // Don't create from client-side code.
-        return prevUsers;
+        // Seed default admin if missing
+        return [...prevUsers, { username: ADMIN_USERNAME, password: 'blueampdc', role: 'admin' }];
     });
   }, [setUsers, users]); 
 
@@ -323,7 +321,7 @@ const App: React.FC = () => {
     if (currentUser?.role !== 'admin') {
         return 'Permission denied.';
     }
-    if (usernameToDelete === 'admin@bluamp.com') {
+    if (usernameToDelete === 'blueampcnergy@gmail.com' || usernameToDelete === 'admin@bluamp.com') {
         return 'The default admin account cannot be deleted.';
     }
     if (usernameToDelete === currentUser.username) {

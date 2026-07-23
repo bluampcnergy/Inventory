@@ -55,7 +55,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#498e72] focus:border-[#498e72] sm:text-sm transition-all text-slate-800 font-medium"
-              placeholder="operator@bluamp.com"
+              placeholder="blueampcnergy@gmail.com"
             />
           </div>
 
