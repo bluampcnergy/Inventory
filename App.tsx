@@ -18,6 +18,7 @@ import InvoiceModule from './components/invoices/InvoiceModule';
 import AiChatPanel from './components/invoices/AiChatPanel';
 import StorageManager from './components/RackSearch'; 
 import PublicStorageViewer from './components/PublicStorageViewer'; // New Import
+import HelpGuide from './components/HelpGuide';
 import Footer from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabase } from './hooks/useSupabase';
@@ -444,6 +445,9 @@ const App: React.FC = () => {
             finishedGoods={finishedGoods}
             wipItems={wipItems}
         />;
+
+      case 'help':
+        return <HelpGuide setView={setView} userRole={currentUser?.role} />;
 
       default:
         return null;

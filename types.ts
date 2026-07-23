@@ -19,7 +19,8 @@ export type View =
   | 'finance_expenses'
   | 'finance_prices'
   | 'finance_maker'
-  | 'supplies';
+  | 'supplies'
+  | 'help';
 
 export interface PriceListItem {
   id: string;

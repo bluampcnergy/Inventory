@@ -113,7 +113,7 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({
         { label: 'Work in Progress', view: 'wip', icon: '⚙️', color: 'from-blue-500/20 to-cyan-500/20 border-blue-400/40' },
         { label: 'Finished Goods', view: 'finished', icon: '✅', color: 'from-green-500/20 to-emerald-500/20 border-green-400/40' },
         { label: 'Invoice Maker', view: 'finance_maker' as View, icon: '🧾', color: 'from-purple-500/20 to-violet-500/20 border-purple-400/40' },
-        { label: 'Expenses', view: 'finance_expenses' as View, icon: '💰', color: 'from-red-500/20 to-pink-500/20 border-red-400/40' },
+        { label: 'Help Guide', view: 'help', icon: '📖', color: 'from-teal-500/20 to-emerald-500/20 border-teal-400/40' },
         { label: 'AI Assistant', view: 'ai_assistant', icon: '✨', color: 'from-indigo-500/20 to-blue-500/20 border-indigo-400/40' },
     ];
 
