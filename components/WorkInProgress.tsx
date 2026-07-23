@@ -1026,9 +1026,49 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
             {/* Modals */}
 
-            {/* Replacement Modal */}
+            {/* Swap/Manage Serials Overview Modal */}
+            {activeWipItem && (
+                <Modal isOpen={isManageSerialsModalOpen} onClose={() => setIsManageSerialsModalOpen(false)} title="Manage Production Serials" size="lg">
+                    <div className="space-y-4">
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                            <p className="text-sm text-blue-800">Review all serial numbers currently allocated to this production batch. You can <strong>Swap</strong> any component with available stock.</p>
+                        </div>
+                        {Object.entries(activeWipItem.consumedSerials || {}).map(([goodId, serials]) => {
+                            const good = receivedGoods.find(g => g.id === goodId);
+                            return (
+                                <div key={goodId} className="border rounded-lg overflow-hidden mb-3">
+                                    <div className="bg-slate-100 p-2 text-sm font-bold border-b flex justify-between">
+                                        <span>{good?.name} ({good?.category || 'N/A'})</span>
+                                        <span className="text-slate-500 text-[10px] font-mono">Batch: {good?.invoiceNumber}</span>
+                                    </div>
+                                    <div className="p-3 bg-white">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            {(serials as string[]).map(sn => (
+                                                <div key={sn} className="flex justify-between items-center bg-slate-50 border p-2 rounded-md group hover:border-[#8EBF45] transition-colors">
+                                                    <span className="font-mono text-xs text-slate-700">{sn}</span>
+                                                    <button
+                                                        onClick={() => handleInitiateReplacement(activeWipItem.id, goodId, sn)}
+                                                        className="text-[10px] bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white"
+                                                    >
+                                                        Swap / Damaged
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        <div className="flex justify-end pt-4">
+                            <button onClick={() => setIsManageSerialsModalOpen(false)} className="bg-[#0D0D0D] text-white px-6 py-2 rounded-lg font-bold">Done</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Replacement Modal (Nested on top of Manage Serials) */}
             {replacementTarget && (
-                <Modal isOpen={isReplacementModalOpen} onClose={() => setIsReplacementModalOpen(false)} title="Select Replacement Component" size="lg">
+                <Modal isOpen={isReplacementModalOpen} onClose={() => setIsReplacementModalOpen(false)} title="Select Replacement Component" size="lg" zIndex="z-[150]">
                     <div className="space-y-4">
                         <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4">
                             <p className="text-sm text-yellow-800">
@@ -1074,46 +1114,6 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                     })()}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            {/* Swap/Manage Serials Overview Modal */}
-            {activeWipItem && (
-                <Modal isOpen={isManageSerialsModalOpen} onClose={() => setIsManageSerialsModalOpen(false)} title="Manage Production Serials" size="lg">
-                    <div className="space-y-4">
-                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
-                            <p className="text-sm text-blue-800">Review all serial numbers currently allocated to this production batch. You can <strong>Swap</strong> any component with available stock.</p>
-                        </div>
-                        {Object.entries(activeWipItem.consumedSerials || {}).map(([goodId, serials]) => {
-                            const good = receivedGoods.find(g => g.id === goodId);
-                            return (
-                                <div key={goodId} className="border rounded-lg overflow-hidden mb-3">
-                                    <div className="bg-slate-100 p-2 text-sm font-bold border-b flex justify-between">
-                                        <span>{good?.name} ({good?.category || 'N/A'})</span>
-                                        <span className="text-slate-500 text-[10px] font-mono">Batch: {good?.invoiceNumber}</span>
-                                    </div>
-                                    <div className="p-3 bg-white">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                            {(serials as string[]).map(sn => (
-                                                <div key={sn} className="flex justify-between items-center bg-slate-50 border p-2 rounded-md group hover:border-[#8EBF45] transition-colors">
-                                                    <span className="font-mono text-xs text-slate-700">{sn}</span>
-                                                    <button
-                                                        onClick={() => handleInitiateReplacement(activeWipItem.id, goodId, sn)}
-                                                        className="text-[10px] bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white"
-                                                    >
-                                                        Swap / Damaged
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        <div className="flex justify-end pt-4">
-                            <button onClick={() => setIsManageSerialsModalOpen(false)} className="bg-[#0D0D0D] text-white px-6 py-2 rounded-lg font-bold">Done</button>
                         </div>
                     </div>
                 </Modal>

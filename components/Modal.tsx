@@ -9,9 +9,10 @@ interface ModalProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   persistent?: boolean;
+  zIndex?: string;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', persistent = false }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', persistent = false, zIndex = 'z-[100]' }) => {
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -22,7 +23,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0D0D0D]/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4 transition-all duration-300" onClick={() => !persistent && onClose()}>
+    <div className={`fixed inset-0 bg-[#0D0D0D]/60 backdrop-blur-sm ${zIndex} flex justify-center items-center p-4 transition-all duration-300`} onClick={() => !persistent && onClose()}>
       <div
         className={`bg-white rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] relative w-full ${sizeClasses[size]} overflow-hidden animate-fade-in-scale`}
         onClick={(e) => e.stopPropagation()}
