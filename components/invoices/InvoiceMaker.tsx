@@ -17,6 +17,7 @@ interface InvoiceMakerProps {
     priceList?: PriceListItem[];
     finishedGoods?: FinishedGood[];
     recipes?: Recipe[];
+    addLogEntry?: (action: string, details: string) => void;
 }
 
 // Extend config locally to support new UI flags without breaking shared types immediately
@@ -39,7 +40,7 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
     shippedToLabel?: string;
 };
 
-const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, companyProfiles = [], initialData, priceList = [], finishedGoods = [], recipes = [] }) => {
+const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, companyProfiles = [], initialData, priceList = [], finishedGoods = [], recipes = [], addLogEntry }) => {
     // Load draft from local storage if not editing an existing record
     const draft = useMemo(() => {
         if (initialData?.id) return null;
@@ -523,7 +524,11 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             }
         };
         const { error } = await supabase.from('invoice_templates').insert([payload]);
-        if (!error) { alert("Template saved!"); fetchTemplates(); } else alert("Error saving template");
+        if (!error) { 
+            if (addLogEntry) addLogEntry('Saved Template', `Created invoice template '${templateName}'`);
+            alert("Template saved!"); 
+            fetchTemplates(); 
+        } else alert("Error saving template");
     };
 
     const deleteTemplate = async () => {
@@ -534,6 +539,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         if (error) {
             alert("Error deleting template: " + error.message);
         } else {
+            if (addLogEntry) addLogEntry('Deleted Template', `Deleted invoice template ID '${selectedTemplateId}'`);
             setSelectedTemplateId('');
             fetchTemplates();
         }
@@ -572,7 +578,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         setDoc(selectedDoc);
         if (selectedDoc.document_type) {
             setDocType(selectedDoc.document_type as any);
-            setCustomTitle(selectedDoc.document_type === 'invoice' ? 'INVOICE' : selectedDoc.document_type === 'po' ? 'PURCHASE ORDER' : selectedDoc.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+            setCustomTitle(selectedDoc.document_type === 'generated_invoice' ? 'INVOICE' : (selectedDoc.document_type === 'purchase_order' || selectedDoc.document_type === 'generated_po' || (selectedDoc.document_type as string) === 'po') ? 'PURCHASE ORDER' : selectedDoc.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
         }
         setSearchDocTerm('');
         setDocSearchResults([]);
@@ -911,6 +917,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             if (insertError) throw insertError;
 
             try { localStorage.removeItem('invoice_maker_draft'); } catch (e) {}
+            if (addLogEntry) addLogEntry('Saved Document', `Saved ${docType.toUpperCase()} document #${invNum} to Dashboard.`);
             alert("Document saved to Dashboard!");
         } catch (error: any) {
             alert("Error saving record: " + error.message);

@@ -71,8 +71,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
               <tr key={user.username} className="hover:bg-gray-50">
                 <td className="p-4">{user.username}</td>
                 <td className="p-4">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-[#8EBF45]/20 text-[#658C3E]' : user.role === 'billing' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {user.role === 'admin' ? 'Director Admin' : user.role === 'billing' ? 'Billing & Operations' : 'General Employee'}
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-[#8EBF45]/20 text-[#658C3E]' : user.role === 'billing' ? 'bg-blue-100 text-blue-800' : user.role === 'dashboard_user' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {user.role === 'admin' ? 'Director Admin' : user.role === 'billing' ? 'Billing & Operations' : user.role === 'dashboard_user' ? 'Dashboard Data Employee' : 'General Employee'}
                     </span>
                 </td>
                 <td className="p-4 text-right">
@@ -133,6 +133,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"
             >
               <option value="user">General Employee</option>
+              <option value="dashboard_user">Dashboard-Data Employee (Tables Access, No Dashboard UI)</option>
               <option value="billing">Billing & Operations (Can access Dashboard Data in Tools)</option>
               <option value="admin">Director Admin</option>
             </select>

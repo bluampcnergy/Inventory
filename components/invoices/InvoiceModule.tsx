@@ -48,9 +48,10 @@ interface InvoiceModuleProps {
     activeTab: ActiveTab;
     finishedGoods?: FinishedGood[];
     recipes?: Recipe[];
+    addLogEntry?: (action: string, details: string) => void;
 }
 
-const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfiles = [], invoiceDraft, activeTab, setView, finishedGoods = [], recipes = [] }) => {
+const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfiles = [], invoiceDraft, activeTab, setView, finishedGoods = [], recipes = [], addLogEntry }) => {
     // Batch Queue State
     const [batchQueue, setBatchQueue] = useState<BatchJob[]>([]);
     const [activeJobId, setActiveJobId] = useState<string | null>(null); // Job currently being reviewed
@@ -584,6 +585,7 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
                     priceList={priceList}
                     finishedGoods={finishedGoods}
                     recipes={recipes}
+                    addLogEntry={addLogEntry}
                 />
             )}
 

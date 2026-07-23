@@ -19,12 +19,67 @@ import AiChatPanel from './components/invoices/AiChatPanel';
 import StorageManager from './components/RackSearch'; 
 import PublicStorageViewer from './components/PublicStorageViewer'; // New Import
 import HelpGuide from './components/HelpGuide';
+import { EmployeeTasks } from './components/EmployeeTasks';
+import PlantAiAssistant from './components/PlantAiAssistant';
 import Footer from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabase } from './hooks/useSupabase';
 import { supabase } from './supabaseClient';
-import type { ReceivedGood, Recipe, WIPItem, FinishedGood, RepairItem, User, LogEntry, TestResult, CompanyProfile, ExtractedInvoice, View, StorageRoom, StorageUnit, StorageItem, SupplyRecord } from './types';
+import type { ReceivedGood, Recipe, WIPItem, FinishedGood, RepairItem, User, LogEntry, TestResult, CompanyProfile, ExtractedInvoice, View, StorageRoom, StorageUnit, StorageItem, SupplyRecord, EmployeeTask } from './types';
 import { DUMMY_RECEIVED_GOODS, DUMMY_RECIPES, DUMMY_WIP_ITEMS, DUMMY_FINISHED_GOODS, DUMMY_COMPANY_PROFILES } from './dummyData';
+
+const DUMMY_EMPLOYEE_TASKS: EmployeeTask[] = [
+  {
+    id: 'task-1',
+    assigned_to: 'admin',
+    title: 'Review weekly battery assembly & BOM reports',
+    description: 'Verify raw material consumption matches finished goods output for current cycle.',
+    completed: false,
+    due_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    created_at: Date.now() - 3600000 * 5,
+    created_by: 'system',
+  },
+  {
+    id: 'task-2',
+    assigned_to: 'general',
+    title: 'Inspect raw LFP cell shipment & record serial numbers',
+    description: 'Verify pack seal numbers and check voltage tolerances for incoming batch.',
+    completed: false,
+    due_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    created_at: Date.now() - 3600000 * 4,
+    created_by: 'admin',
+  },
+  {
+    id: 'task-3',
+    assigned_to: 'user',
+    title: 'Perform high-rate discharge test on battery pack #402',
+    description: 'Log peak current draw and thermal rise curve in Testing portal.',
+    completed: true,
+    due_date: new Date().toISOString().split('T')[0],
+    created_at: Date.now() - 3600000 * 24,
+    created_by: 'admin',
+  },
+  {
+    id: 'task-4',
+    assigned_to: 'billing_user',
+    title: 'Generate monthly GST summary report & verify E-way bills',
+    description: 'Reconcile outgoing tax invoices with E-way bill portal logs.',
+    completed: false,
+    due_date: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+    created_at: Date.now() - 3600000 * 12,
+    created_by: 'admin',
+  },
+  {
+    id: 'task-5',
+    assigned_to: 'datlioncnergy@gmail.com',
+    title: 'Audit daily rack storage map & update bin tags',
+    description: 'Ensure finished goods in Rack A2 match physical serial tags.',
+    completed: false,
+    due_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    created_at: Date.now() - 3600000 * 2,
+    created_by: 'admin',
+  },
+];
 
 const App: React.FC = () => {
   // Check for public QR code scan or Iframe Mode
@@ -50,6 +105,14 @@ const App: React.FC = () => {
   const [testResults, setTestResults] = useSupabase<TestResult>('test_results', []);
   const [logs, setLogs] = useSupabase<LogEntry>('logs', []);
   const [companyProfiles, setCompanyProfiles] = useSupabase<CompanyProfile>('company_profiles', DUMMY_COMPANY_PROFILES);
+  const [employeeTasks, setEmployeeTasks] = useSupabase<EmployeeTask>('employee_tasks', DUMMY_EMPLOYEE_TASKS);
+
+  // Auto-seed default employee tasks if table is empty
+  useEffect(() => {
+    if (!employeeTasks || employeeTasks.length === 0) {
+      setEmployeeTasks(DUMMY_EMPLOYEE_TASKS);
+    }
+  }, [employeeTasks, setEmployeeTasks]);
   
   // Storage Management State (New)
   const [rooms, setRooms] = useSupabase<StorageRoom>('storage_rooms', []);
@@ -269,8 +332,51 @@ const App: React.FC = () => {
     setUsers(prev => prev.filter(user => user.username !== usernameToDelete));
     addLogEntry('User Deleted', `Admin '${currentUser.username}' deleted user '${usernameToDelete}'.`);
     return null;
-  }
+  };
 
+  const handleAddEmployeeTask = useCallback((assignedTo: string, title: string, description?: string, dueDate?: string) => {
+    const newTask: EmployeeTask = {
+      id: `task-${Date.now()}`,
+      assigned_to: assignedTo,
+      title,
+      description,
+      completed: false,
+      due_date: dueDate,
+      created_at: Date.now(),
+      created_by: currentUser?.username || 'admin',
+    };
+    setEmployeeTasks(prev => [newTask, ...prev]);
+    addLogEntry('CREATE_TASK', `Assigned task "${title}" to employee ${assignedTo}`);
+  }, [currentUser, setEmployeeTasks, addLogEntry]);
+
+  const handleToggleEmployeeTask = useCallback((taskId: string) => {
+    setEmployeeTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        const nextState = !t.completed;
+        addLogEntry('UPDATE_TASK', `Marked task "${t.title}" as ${nextState ? 'Completed' : 'Pending'}`);
+        return { ...t, completed: nextState };
+      }
+      return t;
+    }));
+  }, [setEmployeeTasks, addLogEntry]);
+
+  const handleDeleteEmployeeTask = useCallback((taskId: string) => {
+    const target = employeeTasks.find(t => t.id === taskId);
+    setEmployeeTasks(prev => prev.filter(t => t.id !== taskId));
+    if (target) {
+      addLogEntry('DELETE_TASK', `Deleted task "${target.title}" assigned to ${target.assigned_to}`);
+    }
+  }, [employeeTasks, setEmployeeTasks, addLogEntry]);
+
+  const handleEditEmployeeTask = useCallback((taskId: string, title: string, description?: string, dueDate?: string) => {
+    setEmployeeTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        return { ...t, title, description, due_date: dueDate };
+      }
+      return t;
+    }));
+    addLogEntry('EDIT_TASK', `Updated task details for "${title}"`);
+  }, [setEmployeeTasks, addLogEntry]);
 
   const renderView = useCallback(() => {
     // Handle Finance Sub-routes
@@ -288,11 +394,27 @@ const App: React.FC = () => {
             activeTab={tab}
             finishedGoods={finishedGoods}
             recipes={recipes}
+            addLogEntry={addLogEntry}
         />;
     }
 
     switch (view) {
       case 'home':
+        if (currentUser?.role === 'dashboard_user') {
+          return (
+            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-200 text-center m-8">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4 text-2xl">🔒</div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Dashboard Access Restricted</h2>
+              <p className="text-slate-600 max-w-md text-sm mb-6">
+                Your account role (Dashboard Data Employee) has direct database access for tools (Invoice Maker, Operations, Supplies) but is restricted from viewing the Summary Dashboard UI.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setView('wip')} className="px-4 py-2 bg-[#8EBF45] text-[#0D0D0D] font-bold rounded-lg text-xs uppercase hover:bg-[#7cb037]">Go to Operations (WIP)</button>
+                <button onClick={() => setView('finance_maker')} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-xs uppercase hover:bg-slate-700">Go to Invoice Maker</button>
+              </div>
+            </div>
+          );
+        }
         return <HomeDashboard
           receivedGoods={receivedGoods}
           wipItems={wipItems}
@@ -302,6 +424,8 @@ const App: React.FC = () => {
           logs={logs}
           currentUser={currentUser}
           setView={setView}
+          employeeTasks={employeeTasks}
+          onToggleTask={handleToggleEmployeeTask}
         />;
       case 'received':
         return (
@@ -353,6 +477,7 @@ const App: React.FC = () => {
           companyProfiles={companyProfiles}
           productionDraft={productionDraft}
           setProductionDraft={setProductionDraft}
+          currentUser={currentUser}
         />;
       case 'dtf':
         return <DirectToFinished
@@ -438,13 +563,32 @@ const App: React.FC = () => {
           />
         ) : <div className="text-center p-8 text-red-600 font-semibold">Access Denied</div>;
       
+      case 'employee_tasks':
+        return (
+          <EmployeeTasks
+            currentUser={currentUser}
+            users={users}
+            tasks={employeeTasks}
+            onAddTask={handleAddEmployeeTask}
+            onToggleTask={handleToggleEmployeeTask}
+            onDeleteTask={handleDeleteEmployeeTask}
+            onEditTask={handleEditEmployeeTask}
+          />
+        );
+
       case 'ai_assistant':
-        return <AiChatPanel 
-            currentUser={currentUser} 
+        return (
+          <PlantAiAssistant
+            currentUser={currentUser}
             receivedGoods={receivedGoods}
             finishedGoods={finishedGoods}
             wipItems={wipItems}
-        />;
+            recipes={recipes}
+            suppliesRecords={suppliesRecords}
+            logs={logs}
+            employeeTasks={employeeTasks}
+          />
+        );
 
       case 'help':
         return <HelpGuide setView={setView} userRole={currentUser?.role} />;
@@ -452,7 +596,7 @@ const App: React.FC = () => {
       default:
         return null;
     }
-  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords]);
+  }, [view, receivedGoods, recipes, wipItems, finishedGoods, repairItems, logs, users, currentUser, addLogEntry, setReceivedGoods, setWipItems, setFinishedGoods, setRepairItems, setRecipes, testResults, setTestResults, companyProfiles, setCompanyProfiles, invoiceDraft, productionDraft, rooms, storageUnits, storageItems, setRooms, setStorageUnits, setStorageItems, suppliesRecords, setSuppliesRecords, employeeTasks, handleAddEmployeeTask, handleToggleEmployeeTask, handleDeleteEmployeeTask, handleEditEmployeeTask]);
 
   // --- COMPANY PROFILES IFRAME ROUTE ---
   if (mode === 'add_company') {

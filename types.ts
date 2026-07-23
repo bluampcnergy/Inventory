@@ -12,6 +12,7 @@ export type View =
   | 'log'
   | 'companies'
   | 'users'
+  | 'employee_tasks'
   | 'ai_assistant'
   | 'finance_dashboard'
   | 'finance_upload'
@@ -32,7 +33,18 @@ export interface PriceListItem {
 export interface User {
   username: string;
   password?: string;
-  role: 'admin' | 'user' | 'billing';
+  role: 'admin' | 'user' | 'billing' | 'dashboard_user';
+}
+
+export interface EmployeeTask {
+  id: string;
+  assigned_to: string; // employee username
+  title: string;
+  description?: string;
+  completed: boolean;
+  due_date?: string;
+  created_at: number;
+  created_by: string; // admin username
 }
 
 export interface LogEntry {
@@ -254,7 +266,6 @@ export interface InvoiceItem {
   igst_rate?: number;
   igst_amount?: number;
   total_value: number;
-  image_url?: string;
 }
 
 export interface SupplyRecord {

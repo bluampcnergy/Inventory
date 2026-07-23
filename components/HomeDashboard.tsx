@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import type { ReceivedGood, WIPItem, FinishedGood, Recipe, SupplyRecord, LogEntry, View, ExtractedInvoice, Expense } from '../types';
+import type { ReceivedGood, WIPItem, FinishedGood, Recipe, SupplyRecord, LogEntry, View, ExtractedInvoice, Expense, EmployeeTask } from '../types';
 
 interface HomeDashboardProps {
     receivedGoods: ReceivedGood[];
@@ -10,8 +10,10 @@ interface HomeDashboardProps {
     recipes: Recipe[];
     suppliesRecords: SupplyRecord[];
     logs: LogEntry[];
-    currentUser: { username: string; role: 'admin' | 'user' | 'billing' } | null;
+    currentUser: { username: string; role: 'admin' | 'user' | 'billing' | 'dashboard_user' } | null;
     setView: (view: View) => void;
+    employeeTasks?: EmployeeTask[];
+    onToggleTask?: (taskId: string) => void;
 }
 
 // Utility: human readable time ago
@@ -38,7 +40,7 @@ const isThisWeek = (ts: number) => {
 };
 
 const HomeDashboard: React.FC<HomeDashboardProps> = ({
-    receivedGoods, wipItems, finishedGoods, recipes, suppliesRecords, logs, currentUser, setView
+    receivedGoods, wipItems, finishedGoods, recipes, suppliesRecords, logs, currentUser, setView, employeeTasks = [], onToggleTask
 }) => {
     // Fetch invoice & expense counts from Supabase (they aren't passed as props)
     const [invoiceStats, setInvoiceStats] = useState({ total: 0, today: 0, thisWeek: 0, totalValue: 0, todayValue: 0 });
@@ -436,6 +438,190 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({
                             );
                         })}
                     </div>
+                )}
+            </div>
+
+            {/* EMPLOYEE TO-DO & TASKS SECTION */}
+            <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+                    <div>
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <span className="w-2 h-2 bg-[#8EBF45] rounded-full"></span>
+                            {currentUser?.role === 'admin' ? 'All Employee To-Do Tasks' : 'My Assigned To-Do List'}
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            {currentUser?.role === 'admin'
+                                ? 'Consolidated operational tasks assigned to team members.'
+                                : 'Your assigned operational items and action tasks.'}
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={() => setView('employee_tasks')}
+                        className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                    >
+                        <span>Manage Tasks</span>
+                        <span>→</span>
+                    </button>
+                </div>
+
+                {/* NON-ADMIN EMPLOYEE VIEW: PERSONAL TASK LIST */}
+                {currentUser?.role !== 'admin' ? (
+                    (() => {
+                        let myTasks = employeeTasks.filter(t => 
+                            t.assigned_to === currentUser?.username || 
+                            t.assigned_to === 'general' || 
+                            t.assigned_to === 'all'
+                        );
+                        if (myTasks.length === 0 && employeeTasks.length > 0) {
+                            myTasks = employeeTasks;
+                        }
+                        const completedCount = myTasks.filter(t => t.completed).length;
+                        const progress = myTasks.length > 0 ? Math.round((completedCount / myTasks.length) * 100) : 0;
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-xs font-bold text-slate-700">Task Completion Status</div>
+                                        <div className="text-xs text-slate-500">{completedCount} of {myTasks.length} tasks completed</div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                            <div className="h-full bg-[#8EBF45] rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                                        </div>
+                                        <span className="text-xs font-black text-slate-800">{progress}%</span>
+                                    </div>
+                                </div>
+
+                                {myTasks.length === 0 ? (
+                                    <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                                        <p className="text-xs text-slate-400 font-medium">✨ You have no pending tasks assigned!</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {myTasks.map(task => (
+                                            <div
+                                                key={task.id}
+                                                className={`p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
+                                                    task.completed
+                                                        ? 'bg-slate-50/70 border-slate-200 opacity-70'
+                                                        : 'bg-white border-slate-200 shadow-sm hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={task.completed}
+                                                    onChange={() => onToggleTask && onToggleTask(task.id)}
+                                                    className="mt-0.5 w-4 h-4 text-[#8EBF45] rounded border-slate-300 focus:ring-[#8EBF45] cursor-pointer"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold ${task.completed ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                                                        {task.title}
+                                                    </p>
+                                                    {task.description && (
+                                                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{task.description}</p>
+                                                    )}
+                                                    <div className="flex items-center gap-2 mt-2 text-[10px]">
+                                                        {task.due_date && (
+                                                            <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded font-bold">
+                                                                📅 Due: {task.due_date}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-slate-400">By: {task.created_by}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()
+                ) : (
+                    /* ADMIN VIEW: CONSOLIDATED ALL EMPLOYEE TASKS */
+                    (() => {
+                        const totalCount = employeeTasks.length;
+                        const totalDone = employeeTasks.filter(t => t.completed).length;
+
+                        // Group tasks by employee username
+                        const empNames = Array.from(new Set(employeeTasks.map(t => t.assigned_to)));
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase">Total Tasks</div>
+                                        <div className="text-lg font-black text-slate-900">{totalCount}</div>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase">Completed</div>
+                                        <div className="text-lg font-black text-[#658C3E]">{totalDone}</div>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase">Active Employees</div>
+                                        <div className="text-lg font-black text-blue-600">{empNames.length}</div>
+                                    </div>
+                                </div>
+
+                                {employeeTasks.length === 0 ? (
+                                    <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                                        <p className="text-xs text-slate-400 font-medium">No tasks assigned yet across employees.</p>
+                                        <button
+                                            onClick={() => setView('employee_tasks')}
+                                            className="mt-2 text-xs font-bold text-[#658C3E] hover:underline"
+                                        >
+                                            + Go to Employee Tasks to assign tasks
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {empNames.map(emp => {
+                                            const tasksForEmp = employeeTasks.filter(t => t.assigned_to === emp);
+                                            const doneForEmp = tasksForEmp.filter(t => t.completed).length;
+                                            return (
+                                                <div key={emp} className="bg-slate-50/70 rounded-xl border border-slate-200 p-3.5 space-y-2">
+                                                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                                                        <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                                            <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">
+                                                                {emp.charAt(0).toUpperCase()}
+                                                            </span>
+                                                            {emp}
+                                                        </span>
+                                                        <span className="text-[11px] font-bold text-slate-500">
+                                                            {doneForEmp}/{tasksForEmp.length} Done
+                                                        </span>
+                                                    </div>
+                                                    <ul className="space-y-1.5 pt-1">
+                                                        {tasksForEmp.map(t => (
+                                                            <li key={t.id} className="flex items-center justify-between text-xs gap-2">
+                                                                <label className="flex items-center gap-2 cursor-pointer truncate flex-1 min-w-0">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={t.completed}
+                                                                        onChange={() => onToggleTask && onToggleTask(t.id)}
+                                                                        className="w-3.5 h-3.5 text-[#8EBF45] rounded border-slate-300 focus:ring-[#8EBF45]"
+                                                                    />
+                                                                    <span className={`truncate ${t.completed ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}`}>
+                                                                        {t.title}
+                                                                    </span>
+                                                                </label>
+                                                                {t.due_date && (
+                                                                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+                                                                        {t.due_date}
+                                                                    </span>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()
                 )}
             </div>
         </div>
