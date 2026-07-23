@@ -650,12 +650,6 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
         </div>
     );
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
 };
 
 export default HomeDashboard;
