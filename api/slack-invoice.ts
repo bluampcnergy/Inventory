@@ -4,8 +4,8 @@ import { waitUntil } from '@vercel/functions';
 
 // IMPORTANT: VITE_* env vars are NOT available in Vercel serverless functions (they are build-time only).
 // We must use the same hardcoded fallbacks as supabaseClient.ts to ensure database access always works.
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://bfkxdpripwjxenfvwpfu.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJma3hkcHJpcHdqeGVuZnZ3cGZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzE5MjUsImV4cCI6MjA3OTEwNzkyNX0.5JSsA1iYBE5C6LNNWXfJ58JlB2U2TFvVradyON3WIQs';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://ofnwuifgzqjmmnsqsoed.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mbnd1aWZnenFqbW1uc3Fzb2VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MDQwODQsImV4cCI6MjEwMDM4MDA4NH0.J-EU8aFvlj1o6sMoWWJUJKbp8buMo4V8AbAmT7KkTz8';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
