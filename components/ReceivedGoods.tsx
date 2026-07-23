@@ -30,11 +30,20 @@ interface ReceivedGoodsProps {
     setInvoiceDraft?: (draft: ExtractedInvoice) => void;
 }
 
-const statusInfo = {
-    [ReceivedGoodStatus.ND]: { text: 'Not Damaged', color: 'bg-[#A8BF75]/20 text-[#658C3E] border border-[#A8BF75]/50' },
-    [ReceivedGoodStatus.PR]: { text: 'Partially Received', color: 'bg-yellow-50 text-yellow-800 border border-yellow-200' },
-    [ReceivedGoodStatus.D]: { text: 'Damaged', color: 'bg-red-50 text-red-800 border border-red-200' },
-    [ReceivedGoodStatus.Other]: { text: 'Other', color: 'bg-gray-100 text-gray-800 border border-gray-200' },
+const statusInfo: Record<string, { text: string; color: string }> = {
+    [ReceivedGoodStatus.ND]: { text: 'Not Damaged', color: 'bg-emerald-50 text-emerald-800 border border-emerald-200' },
+    [ReceivedGoodStatus.PR]: { text: 'Partially Received', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+    [ReceivedGoodStatus.D]: { text: 'Damaged', color: 'bg-rose-50 text-rose-800 border border-rose-200' },
+    [ReceivedGoodStatus.Other]: { text: 'Other', color: 'bg-slate-100 text-slate-800 border border-slate-200' },
+    'Done': { text: 'Done', color: 'bg-blue-50 text-blue-800 border border-blue-200' },
+    'Completed': { text: 'Completed', color: 'bg-blue-50 text-blue-800 border border-blue-200' },
+};
+
+const getStatusInfo = (status?: string) => {
+    if (status && statusInfo[status]) {
+        return statusInfo[status];
+    }
+    return { text: status || 'Not Damaged', color: 'bg-sky-50 text-sky-800 border border-sky-200' };
 };
 
 const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[] } = {
@@ -588,8 +597,8 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     return (
                         <div key={good.id} className="relative bg-white rounded-2xl shadow-sm hover:shadow-xl p-6 flex flex-col border border-slate-200 transition-all duration-300">
                             <div className="flex justify-between items-start mb-4">
-                                <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${statusInfo[good.status].color}`}>
-                                    {statusInfo[good.status].text}
+                                <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${getStatusInfo(good?.status).color}`}>
+                                    {getStatusInfo(good?.status).text}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
