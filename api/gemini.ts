@@ -19,7 +19,7 @@ export default async function handler(req: any, res: any) {
         if (action === 'generateTextResponse') {
             const { prompt } = payload;
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.0-flash',
                 contents: prompt,
                 config: { temperature: 0.7, maxOutputTokens: 2048 }
             });
@@ -29,7 +29,7 @@ export default async function handler(req: any, res: any) {
         if (action === 'extractInvoiceData') {
             const { fileBase64, mimeType, prompt, schema } = payload;
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.0-flash',
                 contents: {
                     parts: [
                         { inlineData: { mimeType, data: fileBase64 } },
@@ -49,7 +49,7 @@ export default async function handler(req: any, res: any) {
         if (action === 'generateInvoiceFromText') {
             const { prompt, schema } = payload;
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.0-flash',
                 contents: prompt,
                 config: {
                     responseMimeType: 'application/json',
