@@ -218,7 +218,8 @@ async function processInvoice(userText: string, responseUrl: string) {
           return;
         }
     
-        const appUrl = process.env.VITE_APP_URL || process.env.APP_URL || 'https://blueamp.cnergy.co.in';
+        const rawAppUrl = (process.env.APP_URL || process.env.VITE_APP_URL || 'https://blueamp.cnergy.co.in').trim();
+        const appUrl = rawAppUrl.includes('vercel.app') ? 'https://blueamp.cnergy.co.in' : rawAppUrl;
         const invoiceUrl = `${appUrl}/?view=finance_maker&slack_draft=${dbData.id}`; 
     
         const slackResponse = {

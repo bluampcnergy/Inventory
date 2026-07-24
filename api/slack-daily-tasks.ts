@@ -218,7 +218,8 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { command, text, responseUrl, webhookUrl } = parseSlackPayload(req);
-    const appUrl = process.env.VITE_APP_URL || process.env.APP_URL || 'https://blueamp.cnergy.co.in';
+    const rawAppUrl = (process.env.APP_URL || process.env.VITE_APP_URL || 'https://blueamp.cnergy.co.in').trim();
+    const appUrl = rawAppUrl.includes('vercel.app') ? 'https://blueamp.cnergy.co.in' : rawAppUrl;
     const defaultWebhookUrl = process.env.SLACK_WEBHOOK_URL_TO_DO || process.env.SLACK_WEBHOOK_URL || process.env.SLACK_TASKS_WEBHOOK_URL;
 
     const targetWebhookUrl = webhookUrl || defaultWebhookUrl;
