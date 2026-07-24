@@ -12,6 +12,7 @@ export interface StockAlertInfo {
     thresholdQty: number;
     isLowStock: boolean;
     isOutOfStock: boolean;
+    ignoreReplenishment: boolean;
     percentRemaining: number;
 }
 
@@ -43,8 +44,9 @@ export const getItemStockAlertInfo = (
     const thresholdQty = Math.round((initialQty * thresholdPercent) / 100);
     const currQty = Math.max(0, item.quantity || 0);
 
+    const ignoreReplenishment = Boolean(item.ignoreReplenishment);
     const isOutOfStock = currQty === 0;
-    const isLowStock = currQty <= thresholdQty;
+    const isLowStock = !ignoreReplenishment && (currQty <= thresholdQty);
     const percentRemaining = initialQty > 0 ? Math.min(100, Math.round((currQty / initialQty) * 100)) : 0;
 
     return {
@@ -59,6 +61,7 @@ export const getItemStockAlertInfo = (
         thresholdQty,
         isLowStock,
         isOutOfStock,
+        ignoreReplenishment,
         percentRemaining
     };
 };

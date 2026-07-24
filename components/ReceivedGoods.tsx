@@ -47,8 +47,8 @@ const getStatusInfo = (status?: string) => {
     return { text: status || 'Not Damaged', color: 'bg-sky-50 text-sky-800 border border-sky-200' };
 };
 
-const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[]; initialQuantity?: number; lowStockThresholdPercent?: number } = {
-    name: '', category: '', makeModel: '', supplier: '', quantity: 0, initialQuantity: 0, lowStockThresholdPercent: 20, status: ReceivedGoodStatus.ND, damagedCount: 0, invoiceNumber: '', serials: [], notes: 'actual physical qty = '
+const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[]; initialQuantity?: number; lowStockThresholdPercent?: number; ignoreReplenishment?: boolean } = {
+    name: '', category: '', makeModel: '', supplier: '', quantity: 0, initialQuantity: 0, lowStockThresholdPercent: 20, ignoreReplenishment: false, status: ReceivedGoodStatus.ND, damagedCount: 0, invoiceNumber: '', serials: [], notes: 'actual physical qty = '
 };
 
 const CATEGORIES = ['Cell', 'BMS', 'Bat-misc', 'Nickel Strip', 'Wire', 'Connector', 'Holder', 'Epoxy Sheet', 'Sleeve', 'Tape', 'Screw', 'Cabinet', 'Other'];
@@ -216,6 +216,24 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
     }, []);
 
     const [filterLowStock, setFilterLowStock] = useState(false);
+    const [filterIgnored, setFilterIgnored] = useState(false);
+
+    const handleToggleIgnoreReplenishment = (good: ReceivedGood, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const newIgnored = !good.ignoreReplenishment;
+        try {
+            const map = JSON.parse(localStorage.getItem('bluamp_ignored_items') || '{}');
+            if (newIgnored) map[good.id] = true;
+            else delete map[good.id];
+            localStorage.setItem('bluamp_ignored_items', JSON.stringify(map));
+        } catch (err) {}
+
+        setReceivedGoods(prev => prev.map(item => item.id === good.id ? { ...item, ignoreReplenishment: newIgnored } : item));
+        addLogEntry(
+            'Update Stock Settings',
+            `${newIgnored ? 'Ignored replenishment for' : 'Re-enabled stock alerts for'} "${good.name}"`
+        );
+    };
 
     const filteredGoods = (receivedGoods || []).filter(good => {
         if (!good) return false;
@@ -230,8 +248,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
         const matchesNotes = !filterNotes || (good.notes && good.notes !== 'actual physical qty = ');
         const matchesLowStock = !filterLowStock || getItemStockAlertInfo(good).isLowStock;
+        const matchesIgnored = !filterIgnored || Boolean(good.ignoreReplenishment);
 
-        return matchesSearch && matchesCategory && matchesNotes && matchesLowStock;
+        return matchesSearch && matchesCategory && matchesNotes && matchesLowStock && matchesIgnored;
     }).sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
 
     const handleEditClick = (good: ReceivedGood) => {
@@ -244,6 +263,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             quantity: good.quantity || 0,
             initialQuantity: good.initialQuantity || good.quantity || 0,
             lowStockThresholdPercent: typeof good.lowStockThresholdPercent === 'number' ? good.lowStockThresholdPercent : 20,
+            ignoreReplenishment: Boolean(good.ignoreReplenishment),
             status: good.status || ReceivedGoodStatus.ND,
             damagedCount: good.damagedCount || 0,
             invoiceNumber: good.invoiceNumber || '',
@@ -472,6 +492,14 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             setTestResults(prev => [...prev, ...newTestResults]);
             addLogEntry('Added Raw Material', `Registered ${newGood.quantity} of ${newGood.name}`);
         }
+
+        try {
+            const map = JSON.parse(localStorage.getItem('bluamp_ignored_items') || '{}');
+            if (newGood.ignoreReplenishment) map[newGood.id] = true;
+            else delete map[newGood.id];
+            localStorage.setItem('bluamp_ignored_items', JSON.stringify(map));
+        } catch (e) {}
+
         setIsModalOpen(false);
     };
 
@@ -613,6 +641,12 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                 >
                     ⚠️ Low Stock Alerts
                 </button>
+                <button
+                    onClick={() => setFilterIgnored(!filterIgnored)}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterIgnored ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                    🔕 Ignored Items
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -630,7 +664,11 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                     <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md w-fit ${getStatusInfo(good?.status).color}`}>
                                         {getStatusInfo(good?.status).text}
                                     </div>
-                                    {stockAlert.isLowStock && (
+                                    {good.ignoreReplenishment ? (
+                                        <div className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border w-fit bg-slate-100 text-slate-600 border-slate-200">
+                                            🔕 DO NOT REPLENISH
+                                        </div>
+                                    ) : stockAlert.isLowStock && (
                                         <div className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border w-fit ${
                                             stockAlert.isOutOfStock ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                         }`}>
@@ -638,7 +676,18 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={(e) => handleToggleIgnoreReplenishment(good, e)}
+                                        className={`p-1 rounded-md transition-all text-xs border ${
+                                            good.ignoreReplenishment
+                                                ? 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                                                : 'text-slate-300 border-transparent hover:text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                        title={good.ignoreReplenishment ? 'Click to re-enable stock alerts' : 'Click to ignore low stock alerts (do not replenish)'}
+                                    >
+                                        {good.ignoreReplenishment ? '🔕' : '🔔'}
+                                    </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === good.id ? null : good.id); }}
                                         className={`relative p-1 rounded-md transition-all text-sm ${(good.notes && good.notes !== 'actual physical qty = ')
@@ -809,6 +858,18 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                             <p className="text-[11px] text-slate-500 font-medium">
                                 Triggers alert on Home Dashboard when stock drops below <strong>{Math.round(((formData.initialQuantity || formData.quantity || 0) * (formData.lowStockThresholdPercent ?? 20)) / 100)}</strong> units ({formData.lowStockThresholdPercent ?? 20}% of original entry quantity).
                             </p>
+                            <div className="flex items-center gap-2 pt-2.5 border-t border-slate-200 mt-2">
+                                <input 
+                                    type="checkbox" 
+                                    id="ignoreReplenishment" 
+                                    checked={Boolean(formData.ignoreReplenishment)} 
+                                    onChange={e => setFormData({ ...formData, ignoreReplenishment: e.target.checked })} 
+                                    className="w-4 h-4 text-[#205f64] rounded border-slate-300 focus:ring-[#205f64] cursor-pointer" 
+                                />
+                                <label htmlFor="ignoreReplenishment" className="text-xs font-bold text-slate-700 cursor-pointer select-none flex items-center gap-1">
+                                    🔕 Ignore Replenishment <span className="font-normal text-slate-500 text-[11px]">(Exclude from Home Dashboard & Low Stock Alerts)</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 

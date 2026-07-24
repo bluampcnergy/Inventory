@@ -71,6 +71,7 @@ export interface ReceivedGood {
   quantity: number;
   initialQuantity?: number; // Original entry quantity when received/logged
   lowStockThresholdPercent?: number; // Low stock alert threshold (0-100% of original entry, default 20%)
+  ignoreReplenishment?: boolean; // Set to true to ignore low stock alerts (do not replenish)
   status: ReceivedGoodStatus | string;
   damagedCount: number;
   invoiceNumber: string;

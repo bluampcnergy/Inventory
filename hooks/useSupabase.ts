@@ -6,7 +6,7 @@ import { supabase } from '../supabaseClient';
 // These must be stripped before upsert to avoid PGRST204 ("column not found") errors.
 const CLIENT_ONLY_FIELDS: Record<string, string[]> = {
   finished_goods: ['isDTF'],
-  received_goods: ['initialQuantity', 'lowStockThresholdPercent'],
+  received_goods: ['initialQuantity', 'lowStockThresholdPercent', 'ignoreReplenishment'],
 };
 
 // Strip client-only fields before sending to Supabase
@@ -29,6 +29,12 @@ const rehydrateFromDb = (tableName: string, items: any[]): any[] => {
     }));
   }
   if (tableName === 'received_goods') {
+    let ignoredMap: Record<string, boolean> = {};
+    try {
+      ignoredMap = JSON.parse(localStorage.getItem('bluamp_ignored_items') || '{}');
+    } catch (e) {
+      ignoredMap = {};
+    }
     return items.map(item => ({
       ...item,
       initialQuantity: typeof item.initialQuantity === 'number' && item.initialQuantity > 0 
@@ -36,7 +42,10 @@ const rehydrateFromDb = (tableName: string, items: any[]): any[] => {
         : Math.max(item.quantity || 0, Array.isArray(item.serials) ? item.serials.length : 0, 1),
       lowStockThresholdPercent: typeof item.lowStockThresholdPercent === 'number'
         ? item.lowStockThresholdPercent
-        : 20
+        : 20,
+      ignoreReplenishment: typeof item.ignoreReplenishment === 'boolean'
+        ? item.ignoreReplenishment
+        : Boolean(ignoredMap[item.id])
     }));
   }
   return items;

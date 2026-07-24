@@ -342,10 +342,69 @@ return (
 
 ---
 
-## 6. Replication Summary Checklist
+## 6. Ignoring Items / Excluding Non-Replenished Stock
 
-- [x] Extend `ReceivedGood` interface with `initialQuantity` & `lowStockThresholdPercent`.
-- [x] Create `utils/stockAlerts.ts` for calculations.
-- [x] Add threshold slider & percentage input to Add/Edit form in `ReceivedGoods.tsx`.
-- [x] Add low-stock card badges & low-stock filter button in `ReceivedGoods.tsx`.
+For discontinued items, custom obsolete parts, or one-off project materials that you do **not** plan to re-order, you can mark them as **Ignored / Do Not Replenish**.
+
+### A. Data Schema Extension
+Add `ignoreReplenishment?: boolean` to the item model:
+```typescript
+export interface ReceivedGood {
+    // ...
+    ignoreReplenishment?: boolean; // Set to true to suppress low stock alerts & notifications
+}
+```
+
+### B. Utility Logic (`utils/stockAlerts.ts`)
+Items marked with `ignoreReplenishment = true` are excluded from triggering `isLowStock` alerts:
+```typescript
+const ignoreReplenishment = Boolean(good.ignoreReplenishment);
+const isOutOfStock = currentQty <= 0;
+// Exclude ignored items from low stock alerts
+const isLowStock = !ignoreReplenishment && (currentQty <= thresholdQty);
+```
+
+### C. UI & Control Toggles
+1. **Modal Form Checkbox**: Add a checkbox control in the item form:
+   ```tsx
+   <div className="flex items-center gap-2 pt-2.5 border-t border-slate-200 mt-2">
+       <input 
+           type="checkbox" 
+           id="ignoreReplenishment" 
+           checked={Boolean(formData.ignoreReplenishment)} 
+           onChange={e => setFormData({ ...formData, ignoreReplenishment: e.target.checked })} 
+           className="w-4 h-4 text-[#205f64] rounded border-slate-300 focus:ring-[#205f64] cursor-pointer" 
+       />
+       <label htmlFor="ignoreReplenishment" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+           🔕 Ignore Replenishment (Exclude from Home Dashboard & Low Stock Alerts)
+       </label>
+   </div>
+   ```
+
+2. **Quick Toggle on Item Cards**: Provide an inline bell toggle (`🔔` / `🔕`) on the item card header:
+   ```tsx
+   <button
+       onClick={(e) => handleToggleIgnoreReplenishment(good, e)}
+       className={`p-1 rounded-md transition-all text-xs border ${
+           good.ignoreReplenishment
+               ? 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+               : 'text-slate-300 border-transparent hover:text-slate-600 hover:bg-slate-100'
+       }`}
+       title={good.ignoreReplenishment ? 'Click to re-enable stock alerts' : 'Click to ignore low stock alerts'}
+   >
+       {good.ignoreReplenishment ? '🔕' : '🔔'}
+   </button>
+   ```
+
+3. **Ignored Badge & Dedicated Filter**: Display a `🔕 DO NOT REPLENISH` badge on cards and provide a `🔕 Ignored Items` filter button in Raw Materials Operations.
+
+---
+
+## 7. Replication Summary Checklist
+
+- [x] Extend `ReceivedGood` interface with `initialQuantity`, `lowStockThresholdPercent`, and `ignoreReplenishment`.
+- [x] Create `utils/stockAlerts.ts` for alert calculations and ignore filter logic.
+- [x] Add threshold slider, percentage input, and "Ignore Replenishment" checkbox to Add/Edit form in `ReceivedGoods.tsx`.
+- [x] Add low-stock card badges, "DO NOT REPLENISH" badges, and `🔕 Ignored Items` filter button in `ReceivedGoods.tsx`.
 - [x] Render clean, non-cluttered Stock Level Alerts banner on `HomeDashboard.tsx` linking to Operations.
+
