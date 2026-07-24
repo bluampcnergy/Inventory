@@ -467,6 +467,7 @@ const App: React.FC = () => {
         }
         return <HomeDashboard
           receivedGoods={receivedGoods}
+          setReceivedGoods={setReceivedGoods}
           wipItems={wipItems}
           finishedGoods={finishedGoods}
           recipes={recipes}

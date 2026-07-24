@@ -69,6 +69,8 @@ export interface ReceivedGood {
   makeModel: string;
   supplier: string;
   quantity: number;
+  initialQuantity?: number; // Original entry quantity when received/logged
+  lowStockThresholdPercent?: number; // Low stock alert threshold (0-100% of original entry, default 20%)
   status: ReceivedGoodStatus | string;
   damagedCount: number;
   invoiceNumber: string;

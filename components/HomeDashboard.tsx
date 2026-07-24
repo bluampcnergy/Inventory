@@ -2,9 +2,12 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { ReceivedGood, WIPItem, FinishedGood, Recipe, SupplyRecord, LogEntry, View, ExtractedInvoice, Expense, EmployeeTask } from '../types';
 import { getDueDateBadgeInfo } from '../utils';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import { getLowStockAlerts, getItemStockAlertInfo } from '../utils/stockAlerts';
 
 interface HomeDashboardProps {
     receivedGoods: ReceivedGood[];
+    setReceivedGoods?: React.Dispatch<React.SetStateAction<ReceivedGood[]>>;
     wipItems: WIPItem[];
     finishedGoods: FinishedGood[];
     recipes: Recipe[];
@@ -35,8 +38,28 @@ const isToday = (ts: number) => {
 };
 
 const HomeDashboard: React.FC<HomeDashboardProps> = ({
-    receivedGoods, wipItems, finishedGoods, recipes, suppliesRecords, logs, currentUser, setView, employeeTasks = [], onToggleTask
+    receivedGoods, setReceivedGoods, wipItems, finishedGoods, recipes, suppliesRecords, logs, currentUser, setView, employeeTasks = [], onToggleTask
 }) => {
+    // Stock Threshold Overrides State (0 - 100%)
+    const [thresholdOverrides, setThresholdOverrides] = useLocalStorage<Record<string, number>>('bluamp_stock_thresholds', {});
+    const [showAllThresholdsModal, setShowAllThresholdsModal] = useState(false);
+
+    const lowStockAlerts = useMemo(() => {
+        return getLowStockAlerts(receivedGoods, thresholdOverrides);
+    }, [receivedGoods, thresholdOverrides]);
+
+    const allStockItems = useMemo(() => {
+        return (receivedGoods || []).map(item => getItemStockAlertInfo(item, thresholdOverrides));
+    }, [receivedGoods, thresholdOverrides]);
+
+    const handleThresholdChange = (itemId: string, newPercent: number) => {
+        const val = Math.max(0, Math.min(100, newPercent));
+        setThresholdOverrides(prev => ({ ...prev, [itemId]: val }));
+        if (setReceivedGoods) {
+            setReceivedGoods(prev => prev.map(item => item.id === itemId ? { ...item, lowStockThresholdPercent: val } : item));
+        }
+    };
+
     // Fetch invoice & expense counts from Supabase (they aren't passed as props)
     const [invoiceStats, setInvoiceStats] = useState({ total: 0, today: 0, thisWeek: 0, totalValue: 0, todayValue: 0 });
     const [expenseStats, setExpenseStats] = useState({ total: 0, today: 0, todayAmount: 0 });
@@ -179,6 +202,197 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({
                         <div className="text-[10px] font-bold text-[#205f64] uppercase tracking-wider leading-tight font-brand">{link.label}</div>
                     </button>
                 ))}
+            </div>
+
+            {/* LOW STOCK NOTIFICATIONS BANNER & THRESHOLD MANAGER */}
+            <div className={`rounded-2xl p-5 shadow-sm border transition-all ${
+                lowStockAlerts.length > 0
+                    ? 'bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-orange-500/10 border-amber-300/60'
+                    : 'bg-white border-[#2ca4c2]/20'
+            }`}>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200/60 pb-3 mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${
+                            lowStockAlerts.length > 0 ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                            {lowStockAlerts.length > 0 ? '⚠️' : '✅'}
+                        </div>
+                        <div>
+                            <h3 className="text-xs font-black text-[#205f64] uppercase tracking-widest flex items-center gap-2 font-brand">
+                                Stock Level Alerts & Notifications
+                                {lowStockAlerts.length > 0 ? (
+                                    <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-500 text-white rounded-full shadow-sm">
+                                        {lowStockAlerts.length} LOW STOCK
+                                    </span>
+                                ) : (
+                                    <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full">
+                                        All Stock Healthy
+                                    </span>
+                                )}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                {lowStockAlerts.length > 0
+                                    ? 'Items logged in inventory that have fallen below their set safety threshold percentage (0–100%).'
+                                    : 'All inventory items are currently above their configured minimum stock thresholds.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => setShowAllThresholdsModal(!showAllThresholdsModal)}
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+                    >
+                        <span>⚙️ {showAllThresholdsModal ? 'Close Threshold Manager' : 'Manage Thresholds'}</span>
+                    </button>
+                </div>
+
+                {/* LOW STOCK ALERT CARDS GRID */}
+                {lowStockAlerts.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {lowStockAlerts.map(item => (
+                            <div key={item.id} className="bg-white rounded-xl p-4 border border-amber-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                                <div>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                                {item.category}
+                                            </span>
+                                            <h4 className="text-sm font-bold text-slate-800 mt-1">{item.name}</h4>
+                                            {item.makeModel && <p className="text-xs text-slate-500">{item.makeModel}</p>}
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md border ${
+                                            item.isOutOfStock
+                                                ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                                : 'bg-amber-100 text-amber-900 border-amber-300'
+                                        }`}>
+                                            {item.isOutOfStock ? '🚫 OUT OF STOCK' : '⚠️ LOW STOCK'}
+                                        </span>
+                                    </div>
+
+                                    {/* STOCK PROGRESS BAR */}
+                                    <div className="my-3 space-y-1">
+                                        <div className="flex justify-between text-xs font-semibold">
+                                            <span className="text-slate-600">Current / Original Entry</span>
+                                            <span className={item.isOutOfStock ? 'text-rose-600 font-extrabold' : 'text-amber-700 font-bold'}>
+                                                {item.quantity} / {item.initialQuantity} units ({item.percentRemaining}%)
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-300 ${
+                                                    item.isOutOfStock
+                                                        ? 'bg-rose-600'
+                                                        : item.percentRemaining <= 10
+                                                        ? 'bg-rose-500 animate-pulse'
+                                                        : 'bg-amber-500'
+                                                }`}
+                                                style={{ width: `${Math.min(100, item.percentRemaining)}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* THRESHOLD CONTROL SLIDER (0-100%) */}
+                                <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="font-bold text-slate-700">Alert Threshold (%):</span>
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={item.thresholdPercent}
+                                                onChange={(e) => handleThresholdChange(item.id, Number(e.target.value))}
+                                                className="w-14 px-1.5 py-0.5 border border-slate-300 rounded text-center text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#205f64]"
+                                            />
+                                            <span className="font-bold text-slate-600">%</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={item.thresholdPercent}
+                                            onChange={(e) => handleThresholdChange(item.id, Number(e.target.value))}
+                                            className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#205f64]"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-medium">
+                                        <span>Triggers alert below <strong>{item.thresholdQty}</strong> units</span>
+                                        <button
+                                            onClick={() => setView('received')}
+                                            className="text-[#205f64] hover:text-[#498e72] font-bold underline transition-colors"
+                                        >
+                                            Inspect Inventory 📦
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+
+                {/* ALL THRESHOLDS MANAGER DRAWER */}
+                {showAllThresholdsModal && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h4 className="text-xs font-black text-[#205f64] uppercase tracking-wider font-brand">
+                                Configured Minimum Stock Thresholds ({allStockItems.length} items)
+                            </h4>
+                            <span className="text-[10px] text-slate-500 font-medium">Sliders adjust alert trigger percentage (0% - 100%)</span>
+                        </div>
+                        {allStockItems.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic bg-slate-50 p-3 rounded-lg">No raw material items registered in inventory.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
+                                {allStockItems.map(item => (
+                                    <div key={item.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex justify-between items-start">
+                                                <span className="text-xs font-bold text-slate-800">{item.name}</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                    item.isLowStock ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                                }`}>
+                                                    {item.quantity} / {item.initialQuantity} units ({item.percentRemaining}%)
+                                                </span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-500">{item.category} {item.makeModel ? `• ${item.makeModel}` : ''}</span>
+                                        </div>
+
+                                        <div className="mt-2 pt-2 border-t border-slate-200/60 space-y-1">
+                                            <div className="flex justify-between items-center text-[11px]">
+                                                <span className="text-slate-600 font-medium">Alert Trigger:</span>
+                                                <span className="font-bold text-slate-800">{item.thresholdPercent}% ({item.thresholdQty} units)</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="100"
+                                                    value={item.thresholdPercent}
+                                                    onChange={(e) => handleThresholdChange(item.id, Number(e.target.value))}
+                                                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#205f64]"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={item.thresholdPercent}
+                                                    onChange={(e) => handleThresholdChange(item.id, Number(e.target.value))}
+                                                    className="w-12 px-1 py-0.5 text-center text-xs border rounded font-bold text-slate-800 focus:outline-none"
+                                                />
+                                                <span className="text-xs font-bold text-slate-600">%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* EMPLOYEE TO-DO & TASKS SECTION */}
