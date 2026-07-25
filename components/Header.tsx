@@ -97,7 +97,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
               />
               <div className="flex flex-col justify-center">
                 <h1 className="text-lg font-extrabold text-white leading-none tracking-tight font-brand bluamp-logo-text">Bluamp</h1>
-                <p className="text-[10px] text-[#75c081] font-black tracking-widest uppercase mt-0.5">Plant Management OS</p>
+                <p className="text-[10px] text-[#75c081] font-black tracking-widest uppercase mt-0.5">Plant OS</p>
               </div>
             </div>
           </div>
