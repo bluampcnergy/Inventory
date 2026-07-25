@@ -9,6 +9,57 @@ const CLIENT_ONLY_FIELDS: Record<string, string[]> = {
   received_goods: ['initialQuantity', 'lowStockThresholdPercent', 'ignoreReplenishment'],
 };
 
+// ============================================================
+// 1. GLOBAL IN-MEMORY CACHE WITH TTL (5 MINUTES)
+// ============================================================
+interface CacheEntry {
+  data: any[];
+  timestamp: number;
+}
+const MEMORY_CACHE: Record<string, CacheEntry> = {};
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes fresh data window
+
+const getValidCache = (tableName: string): any[] | null => {
+  const entry = MEMORY_CACHE[tableName];
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+    return entry.data;
+  }
+  return null;
+};
+
+const setCache = (tableName: string, data: any[]) => {
+  MEMORY_CACHE[tableName] = { data, timestamp: Date.now() };
+};
+
+// ============================================================
+// 2. GLOBAL FETCH QUEUE (Semaphore max 3 concurrent calls)
+// ============================================================
+const MAX_CONCURRENT_FETCHES = 3;
+let activeFetches = 0;
+const fetchQueue: Array<() => void> = [];
+
+const acquireFetchSlot = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (activeFetches < MAX_CONCURRENT_FETCHES) {
+      activeFetches++;
+      resolve();
+    } else {
+      fetchQueue.push(() => {
+        activeFetches++;
+        resolve();
+      });
+    }
+  });
+};
+
+const releaseFetchSlot = () => {
+  activeFetches--;
+  if (fetchQueue.length > 0 && activeFetches < MAX_CONCURRENT_FETCHES) {
+    const next = fetchQueue.shift();
+    if (next) next();
+  }
+};
+
 // Strip client-only fields before sending to Supabase
 const sanitizeForUpload = (tableName: string, item: any): any => {
   const fieldsToStrip = CLIENT_ONLY_FIELDS[tableName];
@@ -73,9 +124,25 @@ export function useSupabase<T>(
     dataRef.current = data;
   }, [data]);
 
-  // Fetch initial data — PAGINATED to bypass Supabase max_rows limit (default 1000)
+  // Fetch initial data — PAGINATED with cache & semaphore queue
   useEffect(() => {
-    const fetchAll = async () => {
+    let lastVisibilityFetch = Date.now();
+
+    const fetchAll = async (bypassCache: boolean = false) => {
+      // 1. Check in-memory cache first unless explicitly bypassed
+      if (!bypassCache) {
+        const cached = getValidCache(tableName);
+        if (cached && cached.length > 0) {
+          console.log(`[useSupabase] Loaded ${cached.length} rows for '${tableName}' from memory cache`);
+          setData(cached as unknown as T[]);
+          lastSyncedData.current = cached as unknown as T[];
+          dataRef.current = cached as unknown as T[];
+          initialFetchDone.current = true;
+          return;
+        }
+      }
+
+      await acquireFetchSlot();
       try {
         const PAGE_SIZE = 1000;
         let allData: any[] = [];
@@ -86,8 +153,6 @@ export function useSupabase<T>(
           let query = supabase.from(tableName).select('*');
 
           // Stable sort: timestamp DESC + id ASC as tiebreaker
-          // Without the secondary sort, same-timestamp rows have non-deterministic order
-          // across pages, causing rows to be skipped or duplicated
           if (tableName === 'test_results' || tableName === 'logs' || tableName === 'received_goods' || tableName === 'finished_goods') {
             query = query.order('timestamp', { ascending: false }).order(idKey, { ascending: true });
           }
@@ -106,7 +171,6 @@ export function useSupabase<T>(
             }
           } else if (dbData) {
             allData = allData.concat(dbData);
-            // If we got fewer rows than PAGE_SIZE, we've reached the end
             if (dbData.length < PAGE_SIZE) {
               hasMore = false;
             } else {
@@ -117,7 +181,6 @@ export function useSupabase<T>(
           }
         }
 
-        // Deduplicate by id — safety net against any overlap between pages
         if (allData.length > 0) {
           const seen = new Set<string>();
           allData = allData.filter((item: any) => {
@@ -131,25 +194,33 @@ export function useSupabase<T>(
           setData(hydrated);
           lastSyncedData.current = hydrated;
           dataRef.current = hydrated;
+          setCache(tableName, hydrated);
         }
         initialFetchDone.current = true;
       } catch (error: any) {
         console.warn(`[Offline Mode] Could not sync '${tableName}' with Supabase. Using local data. Error: ${error.message || 'Network request failed'}`);
         syncEnabled.current = false;
         initialFetchDone.current = true;
+      } finally {
+        releaseFetchSlot();
       }
     };
+
     fetchAll();
 
-    // Re-fetch when the browser tab becomes visible again (fixes stale sessions)
+    // Re-fetch when browser tab becomes visible (60-second cooldown to prevent API churn)
     const handleVisibilityChange = () => {
+      const now = Date.now();
       if (document.visibilityState === 'visible' && initialFetchDone.current && syncEnabled.current) {
-        fetchAll();
+        if (now - lastVisibilityFetch > 60000) {
+          lastVisibilityFetch = now;
+          fetchAll(true);
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [tableName]);
+  }, [tableName, idKey]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -237,11 +308,12 @@ export function useSupabase<T>(
   const setSupabaseData = useCallback((action: React.SetStateAction<T[]>) => {
     setData(prev => {
       const newData = typeof action === 'function' ? (action as any)(prev) : action;
+      setCache(tableName, newData);
       return newData;
     });
     // Schedule a debounced sync instead of immediate Promise.resolve sync
     scheduleDebouncedSync();
-  }, [scheduleDebouncedSync]);
+  }, [tableName, scheduleDebouncedSync]);
 
   return [data, setSupabaseData];
 }
