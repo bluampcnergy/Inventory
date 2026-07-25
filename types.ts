@@ -21,6 +21,7 @@ export type View =
   | 'finance_prices'
   | 'finance_maker'
   | 'supplies'
+  | 'webmail'
   | 'help';
 
 export interface PriceListItem {
@@ -389,3 +390,40 @@ export const EMPTY_INVOICE: ExtractedInvoice = {
   requires_review: true,
   image_link: ''
 };
+
+export interface WebmailAccount {
+    id: string;
+    email: string;
+    senderName: string;
+    imapHost: string;
+    imapPort: number;
+    smtpHost: string;
+    smtpPort: number;
+    username: string;
+    password?: string;
+    isDefault?: boolean;
+}
+
+export interface EmailAttachment {
+    filename: string;
+    size: string;
+    type: string;
+    contentBase64?: string;
+}
+
+export interface EmailMessage {
+    id: string;
+    accountEmail: string;
+    folder: 'inbox' | 'starred' | 'sent' | 'drafts' | 'trash';
+    from: string;
+    to: string;
+    subject: string;
+    date: string;
+    timestamp: number;
+    snippet: string;
+    bodyHtml: string;
+    isUnread?: boolean;
+    isStarred?: boolean;
+    hasAttachments?: boolean;
+    attachments?: EmailAttachment[];
+}

@@ -68,6 +68,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
     operations: ['received', 'testing', 'wip', 'dtf', 'finished', 'storage', 'supplies'] as View[],
     finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_prices', 'finance_maker'] as View[],
     admin: ['companies', 'users', 'employee_tasks', 'ai_assistant', 'reports', 'master', 'log'] as View[],
+    webmail: ['webmail'] as View[],
     help: ['help'] as View[],
   }), []);
 
@@ -76,6 +77,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
     if (categories.operations.includes(currentView)) return 'operations';
     if (categories.finance.includes(currentView)) return 'finance';
     if (categories.admin.includes(currentView)) return 'admin';
+    if (currentView === 'webmail') return 'webmail';
     if (currentView === 'help') return 'help';
     return 'operations';
   }, [currentView, categories]);
@@ -142,6 +144,15 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 icon={<BuildingIcon className="h-4 w-4" />}
               >
                 Admin
+              </TopNavButton>
+
+              {/* 5. WEBMAIL */}
+              <TopNavButton
+                isActive={currentCategory === 'webmail'}
+                onClick={() => setView('webmail')}
+                icon={<span className="text-xs">✉️</span>}
+              >
+                Webmail
               </TopNavButton>
             </div>
 
@@ -338,6 +349,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                 <SubNavButton isActive={currentView === 'reports'} onClick={() => setView('reports')}>Exports</SubNavButton>
                 <SubNavButton isActive={currentView === 'master'} onClick={() => setView('master')}>Traceability</SubNavButton>
                 <SubNavButton isActive={currentView === 'log'} onClick={() => setView('log')}>Logs</SubNavButton>
+              </>
+            )}
+
+            {/* WEBMAIL SUB-NAV */}
+            {currentCategory === 'webmail' && (
+              <>
+                <div className="flex items-center gap-1 text-[10px] font-black text-[#205f64]/70 uppercase tracking-widest mr-2">Mailbox:</div>
+                <SubNavButton isActive={currentView === 'webmail'} onClick={() => setView('webmail')}>IMAP/SMTP Webmail Client</SubNavButton>
               </>
             )}
 

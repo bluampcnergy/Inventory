@@ -21,6 +21,7 @@ import PublicStorageViewer from './components/PublicStorageViewer'; // New Impor
 import HelpGuide from './components/HelpGuide';
 import { EmployeeTasks } from './components/EmployeeTasks';
 import PlantAiAssistant from './components/PlantAiAssistant';
+import Webmail from './components/Webmail';
 import Footer from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabase } from './hooks/useSupabase';
@@ -641,6 +642,9 @@ const App: React.FC = () => {
             employeeTasks={employeeTasks}
           />
         );
+
+      case 'webmail':
+        return <Webmail currentUser={currentUser} />;
 
       case 'help':
         return <HelpGuide setView={setView} userRole={currentUser?.role} />;
