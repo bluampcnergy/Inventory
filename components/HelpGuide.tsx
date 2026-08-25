@@ -938,34 +938,6 @@ export const HelpGuide: React.FC<HelpGuideProps> = ({ setView, userRole }) => {
           </div>
         )}
 
-        {/* QUICK EXTERNAL RESOURCES FOOTER */}
-        <div className="bg-slate-850 border border-slate-700/60 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h4 className="text-sm font-bold text-white">Need Additional Support or Enterprise Data Export?</h4>
-            <p className="text-xs text-slate-400 mt-0.5">Access support reporting portals or explore Prismatic Data analytics directly.</p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <a
-              href="https://support.bluampenergy.com/report"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3.5 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
-            >
-              <span>Support Reports</span>
-              <span className="text-slate-400">↗</span>
-            </a>
-            <a
-              href="https://prismaticdata.bluampenergy.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3.5 py-2 text-xs font-bold bg-[#8EBF45]/20 hover:bg-[#8EBF45]/30 text-[#8EBF45] rounded-lg border border-[#8EBF45]/40 transition-colors flex items-center gap-1.5"
-            >
-              <span>Prismatic Data</span>
-              <span className="text-[#8EBF45]">↗</span>
-            </a>
-          </div>
-        </div>
-
       </div>
     </div>
   );

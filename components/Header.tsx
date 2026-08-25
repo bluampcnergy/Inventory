@@ -212,44 +212,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                       </div>
                       <span className="text-[10px] bg-[#75c081]/20 text-[#75c081] px-1.5 py-0.5 rounded font-black">NEW</span>
                     </button>
-
-                    <div className="h-px bg-[#2ca4c2]/20 my-1"></div>
-
-                    {/* 2. Reports */}
-                    <a
-                      href="https://support.bluampenergy.com/report"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIsOtherOpen(false)}
-                      className="w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between hover:bg-[#205f64] text-white transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">📊</span>
-                        <div>
-                          <div className="leading-tight">Reports Portal</div>
-                          <div className="text-[10px] text-slate-300 font-normal">External Support Reports</div>
-                        </div>
-                      </div>
-                      <span className="text-xs text-slate-300">↗</span>
-                    </a>
-
-                    {/* 3. Prismatic Data */}
-                    <a
-                      href="https://support.bluampenergy.com/data"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIsOtherOpen(false)}
-                      className="w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between hover:bg-[#205f64] text-white transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">💎</span>
-                        <div>
-                          <div className="leading-tight">Prismatic Data</div>
-                          <div className="text-[10px] text-slate-300 font-normal">Analytics Engine</div>
-                        </div>
-                      </div>
-                      <span className="text-xs text-slate-300">↗</span>
-                    </a>
                   </div>
                 </>
               )}
