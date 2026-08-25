@@ -3,6 +3,102 @@ import type { WebmailAccount, EmailMessage, EmailAttachment, User } from '../typ
 import { supabase } from '../supabaseClient';
 import { BLUAMP_EMAIL_SIGNATURE_URL, BLUAMP_EMAIL_SIGNATURE_HTML } from '../services/openrouterService';
 
+// --- SVG ICONS FOR UNIVERSAL RENDERING ---
+const InboxIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+  </svg>
+);
+
+const StarIcon: React.FC<{ className?: string; filled?: boolean }> = ({ className = "w-4 h-4", filled = false }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
+const SentIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
+
+const DraftsIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+
+const TrashIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const ComposeIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const RefreshIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="23 4 23 10 17 10" />
+    <polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+const SettingsIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const PaperclipIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+const SearchIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const PlusIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const ReplyIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="9 17 4 12 9 7" />
+    <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+  </svg>
+);
+
+const ForwardIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="15 17 20 12 15 7" />
+    <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+  </svg>
+);
+
 interface WebmailProps {
     currentUser: User | null;
     addLogEntry: (action: string, details: string) => void;
@@ -744,7 +840,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 text-xs font-bold flex items-center gap-1"
                                 title={`Delete configured email address ${activeAccount.email}`}
                             >
-                                <span>🗑️</span>
+                                <TrashIcon className="w-4 h-4 text-rose-500" />
                             </button>
                         )}
                     </div>
@@ -754,7 +850,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                         className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm"
                         title="Add Custom Mailbox Account"
                     >
-                        <span>➕ Add Mailbox</span>
+                        <span className="flex items-center gap-1.5"><PlusIcon className="w-3.5 h-3.5" /> Add Mailbox</span>
                     </button>
 
                     <button
@@ -763,7 +859,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                         className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-300 disabled:opacity-50"
                         title="Sync mailbox with IMAP server"
                     >
-                        <span className={isSyncing ? 'animate-spin' : ''}>🔄</span>
+                        <RefreshIcon className={isSyncing ? "w-3.5 h-3.5 animate-spin" : "w-3.5 h-3.5"} />
                         <span>{isSyncing ? 'Syncing...' : 'Fetch Mail'}</span>
                     </button>
 
@@ -777,7 +873,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                         className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all border border-slate-300"
                         title="Configure IMAP/SMTP Server Settings"
                     >
-                        ⚙️
+                        <SettingsIcon className="w-4 h-4" />
                     </button>
                 </div>
             </div>
@@ -803,7 +899,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                             onClick={() => setIsComposeOpen(true)}
                             className="w-full py-3 px-4 bg-gradient-to-r from-[#205f64] to-[#498e72] hover:opacity-95 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 group"
                         >
-                            <span className="text-lg group-hover:scale-110 transition-transform">✏️</span>
+                            <ComposeIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
                             <span>COMPOSE MAIL</span>
                         </button>
 
@@ -820,7 +916,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5">
-                                    <span>📥</span>
+                                    <InboxIcon className="w-4 h-4 text-[#205f64]" />
                                     <span>Inbox</span>
                                 </span>
                                 {unreadCount > 0 && (
@@ -839,7 +935,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5">
-                                    <span>⭐</span>
+                                    <StarIcon className="w-4 h-4 text-amber-500" filled={true} />
                                     <span>Starred</span>
                                 </span>
                             </button>
@@ -853,7 +949,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5">
-                                    <span>📤</span>
+                                    <SentIcon className="w-4 h-4 text-blue-600" />
                                     <span>Sent Mail</span>
                                 </span>
                             </button>
@@ -867,7 +963,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5">
-                                    <span>📝</span>
+                                    <DraftsIcon className="w-4 h-4 text-slate-600" />
                                     <span>Drafts</span>
                                 </span>
                             </button>
@@ -881,7 +977,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5">
-                                    <span>🗑️</span>
+                                    <TrashIcon className="w-4 h-4 text-rose-500" />
                                     <span>Trash</span>
                                 </span>
                             </button>
@@ -910,7 +1006,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                             placeholder="Search emails..."
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
                         />
-                        <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+                        <span className="absolute left-3 top-2.5 text-slate-400 text-xs pointer-events-none"><SearchIcon className="w-3.5 h-3.5" /></span>
                         {searchTerm && (
                             <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 text-xs hover:text-slate-700">✕</button>
                         )}
@@ -970,7 +1066,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
 
                                     {mail.hasAttachments && (
                                         <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold mt-0.5">
-                                            <span>📎</span>
+                                            <PaperclipIcon className="w-3.5 h-3.5 text-slate-500" />
                                             <span>Attachment</span>
                                         </div>
                                     )}
@@ -1070,7 +1166,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                     }}
                                     className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
                                 >
-                                    <span>↩️ Reply</span>
+                                    <span className="flex items-center gap-1.5"><ReplyIcon className="w-3.5 h-3.5" /> Reply</span>
                                 </button>
                                 <button
                                     onClick={() => {
@@ -1086,7 +1182,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                                     }}
                                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-300"
                                 >
-                                    <span>↪️ Forward</span>
+                                    <span className="flex items-center gap-1.5"><ForwardIcon className="w-3.5 h-3.5" /> Forward</span>
                                 </button>
                             </div>
                         </div>
@@ -1224,7 +1320,7 @@ export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIf
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in">
                         <div className="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center">
                             <div className="flex items-center gap-2">
-                                <span className="text-lg">⚙️</span>
+                                <span className="text-lg"><SettingsIcon className="w-4 h-4" /></span>
                                 <h3 className="text-xs font-black uppercase tracking-wider">
                                     {isAddAccountMode ? 'Add New External Mailbox' : `Mail Server Settings (${editingAccount.email})`}
                                 </h3>
