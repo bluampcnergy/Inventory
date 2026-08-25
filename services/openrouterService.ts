@@ -261,3 +261,53 @@ export const generateTextResponseOpenRouter = async (
     throw error;
   }
 };
+
+export const generateRFQTextOpenRouter = async (params: {
+  product: string;
+  specification?: string;
+  supplierName?: string;
+  contactName?: string;
+  quantity?: number;
+  uom?: string;
+}): Promise<string> => {
+  const prompt = `Write a professional, polite Request for Quotation (RFQ) email body from Bluamp Energies to vendor "${params.supplierName || 'Vendor'}" (Attention: ${params.contactName || 'Sales/Procurement Team'}).
+Product: ${params.product}
+Specification / Particulars: ${params.specification || 'Standard Datasheet Spec'}
+Quantity Required: ${params.quantity ? `${params.quantity} ${params.uom || 'qty'}` : 'Bulk Procurement Quantity'}
+
+Request formal unit pricing (excl & incl GST), bulk tier discounts, lead time/delivery timeline to our Pune facility, payment terms, and warranty period. Keep the tone professional, clear, and ready to send.`;
+
+  try {
+    const aiText = await generateTextResponseOpenRouter(prompt);
+    if (aiText && aiText !== "No response.") {
+      return aiText.trim();
+    }
+  } catch (err) {
+    console.warn("AI RFQ generation fallback activated:", err);
+  }
+
+  // Robust Fallback Template
+  return `Dear ${params.contactName || 'Sales Team'} (${params.supplierName || 'Supplier'}),
+
+We at Bluamp Energies would like to request an official Request for Quotation (RFQ) for the following item:
+
+• Product: ${params.product}
+• Specification / Particulars: ${params.specification || 'As per standard specification'}
+• Quantity Required: ${params.quantity ? `${params.quantity} ${params.uom || 'qty'}` : 'Bulk requirement'}
+
+Could you please share:
+1. Official unit rate (excl. and incl. GST)
+2. Lead time & delivery schedule for Pune plant
+3. Applicable bulk discounts
+4. Warranty & payment terms
+
+Looking forward to your prompt response.
+
+Best regards,
+Procurement Team
+Bluamp Energies`;
+};
+
+export const BLUAMP_EMAIL_SIGNATURE_URL = "https://bluampenergy.com/wp-content/uploads/2018/07/logo-white-001.png";
+export const BLUAMP_EMAIL_SIGNATURE_HTML = `<br/><br/><div class="bluamp-signature" style="margin-top:20px;padding-top:10px;border-top:1px solid #e2e8f0;font-family:Arial,sans-serif;color:#1e293b;"><table style="border:none;"><tr><td style="vertical-align:middle;padding-right:15px;"><img src="${BLUAMP_EMAIL_SIGNATURE_URL}" alt="Bluamp Energies Logo" style="max-height:48px;width:auto;display:block;border-radius:4px;background:#205f64;padding:4px;" /></td><td style="vertical-align:middle;border-left:2px solid #205f64;padding-left:15px;"><div style="font-weight:bold;font-size:14px;color:#205f64;">Bluamp Energies Pvt Ltd</div><div style="font-size:11px;color:#64748b;">Plant Operations & Procurement</div><div style="font-size:11px;color:#498e72;">Web: <a href="https://blueamp.cnergy.co.in" style="color:#2ca4c2;text-decoration:none;">blueamp.cnergy.co.in</a></div></td></tr></table></div>`;
+

@@ -1,10 +1,11 @@
-
+﻿
 import React, { useState, useMemo, useEffect } from 'react';
 import type { WIPItem, ReceivedGood, Recipe, FinishedGood, RepairItem, TestResult, CompanyProfile, UnitMetadata, RepairSwapEntry } from '../types';
 import Modal from './Modal';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { RefreshCw, Printer, ChevronUp, ChevronDown } from './invoices/Icons';
+import { PencilIcon } from './icons/PencilIcon';
 import { SearchIcon } from './icons/SearchIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
 import { SpannerIcon } from './icons/SpannerIcon';
@@ -38,7 +39,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onC
                 <span className={selectedOption ? 'text-slate-800 font-medium' : 'text-slate-400'}>
                     {selectedOption ? selectedOption.label : placeholder || 'Select...'}
                 </span>
-                <span className="text-slate-400 text-xs">▼</span>
+                <span className="text-slate-400 text-xs">â–¼</span>
             </div>
 
             {isOpen && (
@@ -110,6 +111,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
     const [isReplacementModalOpen, setIsReplacementModalOpen] = useState(false);
     const [replacementTarget, setReplacementTarget] = useState<{ wipItemId: string; goodId: string; damagedSerial: string } | null>(null);
     const [replacementSearchTerm, setReplacementSearchTerm] = useState('');
+    const [swapMode, setSwapMode] = useState<'same' | 'category'>('same');
 
     // Manage Serials State
     const [isManageSerialsModalOpen, setIsManageSerialsModalOpen] = useState(false);
@@ -117,6 +119,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
     // Recipe Management
     const [isRecipeModalOpen, setRecipeModalOpen] = useState(false);
+    const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
     const [newRecipeName, setNewRecipeName] = useState('');
     const [newRecipeComponents, setNewRecipeComponents] = useState<{ masterItemName?: string; receivedGoodId?: string; quantityPerUnit: number }[]>([{ masterItemName: '', quantityPerUnit: 1 }]);
 
@@ -150,62 +153,60 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
         }
     }, [productionDraft, recipes, receivedGoods, setProductionDraft]);
 
-    // Helpers
-    const getRecipeName = (id: string) => recipes.find(r => r.id === id)?.name || 'Unknown SKU';
+    const getRecipeName = (id: string) => {
+        const found = recipes.find(r => r.id === id);
+        if (found) return found.name;
+        if (id && !id.startsWith('recipe-')) return id;
+        return `Archived SKU (${id ? id.slice(-6) : 'Unknown'})`;
+    };
     const getGoodName = (id: string) => receivedGoods.find(g => g.id === id)?.name || 'Unknown Item';
 
     const getAvailableSerialsForBatch = (good: ReceivedGood) => {
+        // Non-qty UOM items (grams, cm) NEVER track serial numbers or unit tokens
+        if (good.uom && good.uom !== 'qty') {
+            return [];
+        }
+
         const category = (good.category || '').trim().toLowerCase();
         const name = (good.name || '').trim().toLowerCase();
 
-        // Explicitly identify Bulk types based on common naming conventions
         const isBms = category.includes('bms') || name.includes('bms') || name.includes('pcm') || name.includes('pcb');
-
         const isAccessory =
             name.includes('holder') || name.includes('spacer') || name.includes('strip') ||
             name.includes('tape') || name.includes('bracket') || name.includes('screw') ||
             name.includes('wire') || name.includes('connector') || name.includes('cabinet') ||
             name.includes('sleeve') || name.includes('epoxy') || name.includes('busbar');
 
-        // Strict Cell Definition: 
-        // 1. Must NOT be a BMS or Accessory
-        // 2. Must either be in 'cell' category OR have 'cell' in the name
-        // This prevents "BMS for LFP Cell" from being treated as a Cell.
         const isCellName = name.includes('cell') || category.includes('cell');
-        const isTracked = isCellName && !isBms && !isAccessory;
+        const isCell = isCellName && !isBms && !isAccessory;
 
-        // Case 1: Tracked Items (Cells Only)
-        if (isTracked) {
-            if (!good.serials || good.serials.length === 0) return []; // Must have serials
+        // Case 1: Cells with tested serial numbers
+        if (isCell) {
+            if (!good.serials || good.serials.length === 0) return [];
 
             return good.serials.filter(serial => {
                 const result = testResults.find(tr => tr.receivedGoodId === good.id && tr.serialNumber === serial);
+                if (!result) return false;
 
-                if (isTracked) {
-                    // Cells MUST have test data for matching criteria (Voltage/IR/Cap)
-                    if (!result) return false;
+                const v = result.voltage;
+                const r = result.resistance;
 
-                    const v = result.voltage;
-                    const r = result.resistance;
-
-                    // Basic logic: if tested, it's available. 
-                    if (v === undefined || r === undefined) return false;
-
-                    return true;
-                }
+                if (v === undefined || r === undefined) return false;
                 return true;
             });
         }
 
-        // Case 2: Bulk Items (BMS, Screws, Wires, Cell Holders, etc.)
-        // If real serials exist (manually added), use them.
+        // Case 2: BMS and other discrete qty items
+        // If explicit serials exist (e.g. scanned BMS serials), use them
         if (good.serials && good.serials.length > 0) {
             return good.serials;
         }
 
-        // If no serials but quantity > 0, generate synthetic serials for tracking consumption
+        // If no explicit serials registered, but quantity > 0, generate in-memory unit tokens
+        // so brand/batch options (makeModel) appear in the modal for selection
         if (good.quantity > 0) {
-            return Array.from({ length: good.quantity }).map((_, i) => `BULK-${good.id.slice(-6)}-${i + 1}`);
+            const brandLabel = good.makeModel ? good.makeModel : 'Unit';
+            return Array.from({ length: good.quantity }).map((_, i) => `${brandLabel} #${i + 1}`);
         }
 
         return [];
@@ -264,22 +265,84 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                 return nameMatch || idMatch;
             }).sort((a, b) => a.timestamp - b.timestamp); // FIFO Order
 
-            const pooledAvailable: { good: ReceivedGood; serials: string[] }[] = batches.map(b => ({
-                good: b,
-                serials: getAvailableSerialsForBatch(b)
-            })).filter(p => p.serials.length > 0);
+            const firstBatch = batches[0];
+            const uom = comp.uom || firstBatch?.uom || 'qty';
+            const isTracked = (uom === 'qty');
 
-            const totalAvailableCount = pooledAvailable.reduce((acc, p) => acc + p.serials.length, 0);
+            if (isTracked) {
+                const pooledAvailable: { good: ReceivedGood; serials: string[] }[] = batches.map(b => ({
+                    good: b,
+                    serials: getAvailableSerialsForBatch(b)
+                })).filter(p => p.serials.length > 0);
 
-            return {
-                ...comp,
-                itemName,
-                totalAvailableCount,
-                pooledAvailable,
-                requiredSerialsCount: comp.quantityPerUnit * quantity
-            };
+                const totalAvailableCount = pooledAvailable.reduce((acc, p) => acc + p.serials.length, 0);
+
+                return {
+                    ...comp,
+                    itemName,
+                    uom,
+                    isTracked: true,
+                    totalAvailableCount,
+                    pooledAvailable,
+                    requiredSerialsCount: comp.quantityPerUnit * quantity
+                };
+            } else {
+                const totalAvailableStock = batches.reduce((acc, b) => acc + b.quantity, 0);
+                return {
+                    ...comp,
+                    itemName,
+                    uom,
+                    isTracked: false,
+                    totalAvailableCount: totalAvailableStock,
+                    pooledAvailable: batches.map(b => ({ good: b, serials: [] })),
+                    requiredSerialsCount: comp.quantityPerUnit * quantity
+                };
+            }
         });
     }, [selectedRecipe, quantity, recipes, receivedGoods, testResults]);
+
+    // Auto-select FIFO by default for all tracked components EXCEPT Cells and BMS
+    useEffect(() => {
+        if (!isWipModalOpen || componentsForModal.length === 0) return;
+
+        setConsumedSerials(prev => {
+            let changed = false;
+            const nextSelections = { ...prev };
+
+            componentsForModal.forEach(comp => {
+                if (!comp.isTracked) return;
+
+                const itemName = comp.itemName.toLowerCase();
+                const firstBatchCat = (comp.pooledAvailable[0]?.good?.category || '').toLowerCase();
+
+                const isCellOrBms =
+                    firstBatchCat.includes('cell') || firstBatchCat.includes('bms') ||
+                    itemName.includes('cell') || itemName.includes('bms') ||
+                    itemName.includes('pcm') || itemName.includes('pcb');
+
+                // If NOT Cell or BMS, auto-select FIFO by default
+                if (!isCellOrBms) {
+                    const currentSelectedCount = comp.pooledAvailable.reduce((acc, p) => acc + (nextSelections[p.good.id]?.length || 0), 0);
+                    if (currentSelectedCount !== comp.requiredSerialsCount) {
+                        changed = true;
+                        let remaining = comp.requiredSerialsCount;
+                        comp.pooledAvailable.forEach(p => {
+                            delete nextSelections[p.good.id];
+                        });
+
+                        for (const pool of comp.pooledAvailable) {
+                            if (remaining <= 0) break;
+                            const take = Math.min(remaining, pool.serials.length);
+                            nextSelections[pool.good.id] = pool.serials.slice(0, take);
+                            remaining -= take;
+                        }
+                    }
+                }
+            });
+
+            return changed ? nextSelections : prev;
+        });
+    }, [isWipModalOpen, selectedRecipe, quantity, componentsForModal]);
 
     const masterItemOptions = useMemo(() => {
         const uniqueNames = Array.from(new Set(receivedGoods.map(g => g.name)));
@@ -293,11 +356,12 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             else if (makes.length > 1) makeDisplay = ` (${makes.join(', ')})`;
 
             const category = items[0]?.category;
+            const uom = items[0]?.uom || 'qty';
 
             return {
                 id: name,
                 label: `${name}${makeDisplay}`,
-                subLabel: `${category} • Stock: ${totalStock}`
+                subLabel: `${category} â€¢ Stock: ${totalStock} ${uom}`
             };
         });
     }, [receivedGoods]);
@@ -316,9 +380,6 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                 if (originalFG.unitComponentMap && originalFG.unitComponentMap[item.unitId]) {
                     consumedSerials = originalFG.unitComponentMap[item.unitId];
                 }
-                // Legacy/Fallback: If no strict map, we can't accurately know which components belong to this unit vs others in the batch.
-                // We leave consumedSerials empty or partial to avoid showing misleading data.
-                // New repairs on newly produced items will show correctly.
             }
 
             return {
@@ -356,26 +417,48 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             const required = comp.quantityPerUnit * quantity;
             const itemName = comp.masterItemName || (comp.receivedGoodId ? getGoodName(comp.receivedGoodId) : '');
 
-            // Find all serials selected for this master item across all batches
-            // FIX: Use robust name matching (trim/lowercase) to handle minor discrepancies
+            // Find all batches for this master item
             const batches = receivedGoods.filter(g => {
                 const nameMatch = g.name.trim().toLowerCase() === itemName.trim().toLowerCase();
                 const idMatch = g.id === comp.receivedGoodId;
                 return nameMatch || idMatch;
-            });
+            }).sort((a, b) => a.timestamp - b.timestamp);
 
-            const selectedForThisItem = batches.flatMap(b => {
-                const sns = consumedSerials[b.id] || [];
-                if (sns.length > 0) {
-                    stockDeductions[b.id] = { count: sns.length, serials: sns };
+            const firstBatch = batches[0];
+            const uom = comp.uom || firstBatch?.uom || 'qty';
+            const isTracked = (uom === 'qty');
+
+            if (isTracked) {
+                const selectedForThisItem = batches.flatMap(b => {
+                    const sns = consumedSerials[b.id] || [];
+                    if (sns.length > 0) {
+                        stockDeductions[b.id] = { count: sns.length, serials: sns };
+                    }
+                    return sns;
+                });
+
+                if (selectedForThisItem.length !== required) {
+                    setError(`Insufficient serials selected for ${itemName || 'component'}. Required: ${required}, Selected: ${selectedForThisItem.length}`);
+                    return false;
                 }
-                return sns;
-            });
+            } else {
+                const totalStock = batches.reduce((acc, b) => acc + b.quantity, 0);
+                if (totalStock < required) {
+                    setError(`Insufficient stock for ${itemName || 'component'}. Required: ${required} ${uom}, Available: ${totalStock} ${uom}`);
+                    return false;
+                }
 
-            if (selectedForThisItem.length !== required) {
-                setError(`Insufficient serials selected for ${itemName || 'component'}. Required: ${required}, Selected: ${selectedForThisItem.length}`);
-                return false;
+                let remainingToDeduct = required;
+                for (const b of batches) {
+                    if (remainingToDeduct <= 0) break;
+                    const take = Math.min(remainingToDeduct, b.quantity);
+                    if (take > 0) {
+                        stockDeductions[b.id] = { count: take, serials: [] };
+                        remainingToDeduct -= take;
+                    }
+                }
             }
+
             return true;
         });
 
@@ -419,7 +502,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
         if (!printWindow) return;
 
         // Construct dynamic image URLs
-        const baseUrl = "https://bfkxdpripwjxenfvwpfu.supabase.co/storage/v1/object/public/Product%20drawings/";
+        const baseUrl = "https://supabase.cnergy.co.in/storage/v1/object/public/Product%20drawings/";
         const encodedName = encodeURIComponent(recipe.name);
 
         const pngUrl = `${baseUrl}${encodedName}.png`;
@@ -543,7 +626,8 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             if (!serialsHtml && allSelected.length > 0) {
                 serialsHtml = allSelected.map(a => a.serial).join(', '); // Fallback if simple list
             } else if (!serialsHtml) {
-                serialsHtml = '<span style="color:red; font-style:italic;">No specific serials allocated</span>';
+                const itemUom = comp.uom || (batches[0]?.uom) || 'qty';
+                serialsHtml = `<span style="color:#475569; font-style:italic; font-weight:600;">Quantity Tracked (${required} ${itemUom})</span>`;
             }
 
             return `
@@ -579,19 +663,19 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
               <div style="margin-top: 30px; border-top: 2px dashed #0D0D0D; padding-top: 15px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #333; background: #fafafa; padding: 12px 16px; border-radius: 6px;">
                   <div>
-                      <div style={{ color: '#2563EB', fontWeight: 'bold', fontSize: '12px', marginBottom: '4px', textTransform: 'uppercase' }}>✔ Digital Signature & Authorization</div>
+                      <div style="font-[#205f64]; font-weight: bold; font-size: 12px; margin-bottom: 4px; text-transform: uppercase;">âœ” Digital Signature & Authorization</div>
                       <div><strong>Authorized / Printed By:</strong> ${currentUser?.username || 'Authorized Operator'}</div>
                       <div><strong>Access Level:</strong> ${(currentUser?.role || 'Staff').toUpperCase()}</div>
                       <div><strong>Timestamp:</strong> ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
                   </div>
                   <div style="text-align: right;">
                       <div style="font-family: monospace; font-size: 10px; color: #555; background: #e2e8f0; padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 4px;">[VERIFIED BY PLANT OS]</div>
-                      <div style="font-size: 9px; color: #888;">Bluamp Traceability Standard</div>
+                      <div style="font-size: 9px; color: #888;">Bluamp Energies Traceability Standard</div>
                   </div>
               </div>
 
               <div class="footer" style="margin-top: 15px;">
-                  Generated by Bluamp Plant OS
+                  Generated by Bluamp Energies Plant OS
               </div>
 
               <script>
@@ -612,25 +696,35 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
         const good = receivedGoods.find(g => g.id === goodId);
         if (!good) return;
 
-        // Find all alternative batches of same item
-        const alternativeBatches = receivedGoods.filter(g => g.name === good.name);
-        const totalAvailable = alternativeBatches.reduce((acc, b) => acc + getAvailableSerialsForBatch(b).length, 0);
+        // Check availability across same item OR same category
+        const catLower = (good.category || '').trim().toLowerCase();
+        const categoryBatches = receivedGoods.filter(g => (g.category || '').trim().toLowerCase() === catLower);
+        const totalAvailable = categoryBatches.reduce((acc, b) => acc + getAvailableSerialsForBatch(b).length, 0);
 
         if (totalAvailable === 0) {
-            alert(`No available replacements in storage for item ${good.name}. Please add tested inventory.`);
+            alert(`No available replacements in storage for item '${good.name}' (Category: ${good.category || 'N/A'}). Please add tested inventory.`);
             return;
         }
 
         setReplacementTarget({ wipItemId, goodId, damagedSerial });
         setReplacementSearchTerm('');
+        setSwapMode('same');
         setIsReplacementModalOpen(true);
     };
 
     const handleConfirmReplacement = (replacementSerial: string, replacementBatchId: string) => {
         if (!replacementTarget) return;
-        const { wipItemId, damagedSerial } = replacementTarget;
+        const { wipItemId, damagedSerial, goodId } = replacementTarget;
 
-        if (!confirm(`Confirm replacement of damaged unit ${damagedSerial} with ${replacementSerial}?`)) return;
+        const originalGood = receivedGoods.find(og => og.id === goodId);
+        const replacementGood = receivedGoods.find(rg => rg.id === replacementBatchId);
+        const isCrossSwap = originalGood && replacementGood && (originalGood.name.trim().toLowerCase() !== replacementGood.name.trim().toLowerCase());
+
+        const swapLabel = isCrossSwap
+            ? `Cross-Swap (${originalGood?.name || 'Orig'} âž” ${replacementGood?.name || 'Replacement'})`
+            : `Swap (${replacementGood?.name || 'Replacement'})`;
+
+        if (!confirm(`Confirm ${swapLabel} of damaged unit ${damagedSerial} with ${replacementSerial}?`)) return;
 
         // Check if it's a normal WIP item
         const isWip = wipItems.some(w => w.id === wipItemId);
@@ -742,7 +836,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                 const restoredBatch: ReceivedGood = {
                     id: parentGoodId,
                     name: `Restored Batch (${parentGoodId.substring(0, 12)})`,
-                    category: 'Cell',
+                    category: originalGood?.category || 'Cell',
                     makeModel: 'Restored Component',
                     supplier: 'Restored Inventory',
                     invoiceNumber: 'RESTORED-INV',
@@ -759,7 +853,11 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             return updated;
         });
 
-        addLogEntry('WIP Replacement', `Damaged serial ${damagedSerial} replaced by ${replacementSerial} in ${isWip ? 'production' : 'repair'} batch. Damaged serial returned to raw material stock.`);
+        if (isCrossSwap) {
+            addLogEntry('Cross Swap Serial', `Damaged serial ${damagedSerial} (${originalGood?.name}) cross-swapped with ${replacementSerial} (${replacementGood?.name}, Category: ${originalGood?.category}) in ${isWip ? 'production' : 'repair'} batch.`);
+        } else {
+            addLogEntry('WIP Replacement', `Damaged serial ${damagedSerial} replaced by ${replacementSerial} in ${isWip ? 'production' : 'repair'} batch. Damaged serial returned to raw material stock.`);
+        }
 
         // Update local review state if open
         setActiveWipItem(prev => {
@@ -781,11 +879,30 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             const good = receivedGoods.find(g => g.id === productionDraft.receivedGoodId);
             if (good) targetName = good.name;
         }
+        setEditingRecipeId(null);
+        setNewRecipeName('');
         setNewRecipeComponents([{ masterItemName: targetName, quantityPerUnit: 1 }]);
         setRecipeModalOpen(true);
     };
 
+    const handleEditRecipe = (recipe: Recipe) => {
+        setEditingRecipeId(recipe.id);
+        setNewRecipeName(recipe.name);
+        setNewRecipeComponents(recipe.components.length > 0 ? recipe.components : [{ masterItemName: '', quantityPerUnit: 1 }]);
+    };
+
+    const handleCancelEditRecipe = () => {
+        setEditingRecipeId(null);
+        setNewRecipeName('');
+        setNewRecipeComponents([{ masterItemName: '', quantityPerUnit: 1 }]);
+    };
+
     const handleSaveRecipe = () => {
+        if (!newRecipeName.trim()) {
+            alert("Please enter an SKU Name.");
+            return;
+        }
+
         // Validate components to avoid ghost/empty items
         const validComponents = newRecipeComponents.filter(c => c.masterItemName && c.masterItemName.trim() !== '' && c.quantityPerUnit > 0);
 
@@ -794,16 +911,43 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             return;
         }
 
-        const newRecipe: Recipe = {
-            id: `recipe-${Date.now()}`,
-            name: newRecipeName,
-            components: validComponents,
-        };
-        setRecipes(prev => [...prev, newRecipe]);
+        if (editingRecipeId) {
+            setRecipes(prev => prev.map(r => r.id === editingRecipeId ? { ...r, name: newRecipeName.trim(), components: validComponents } : r));
+            addLogEntry('Updated SKU', `Updated SKU '${newRecipeName.trim()}' (ID: ${editingRecipeId}).`);
+            setEditingRecipeId(null);
+        } else {
+            const newRecipe: Recipe = {
+                id: `recipe-${Date.now()}`,
+                name: newRecipeName.trim(),
+                components: validComponents,
+            };
+            setRecipes(prev => [...prev, newRecipe]);
+            addLogEntry('Created SKU', `Created new SKU '${newRecipeName.trim()}'.`);
+            setSelectedRecipe(newRecipe.id);
+        }
+
         setNewRecipeName('');
         setNewRecipeComponents([{ masterItemName: '', quantityPerUnit: 1 }]);
-        setSelectedRecipe(newRecipe.id);
         setRecipeModalOpen(false);
+    };
+
+    const handleDeleteRecipe = (recipe: Recipe) => {
+        const isUsedInWip = wipItems.some(w => w.recipeId === recipe.id);
+        const isUsedInFG = finishedGoods.some(fg => fg.recipeId === recipe.id);
+        const isUsedInRepair = repairItems.some(r => r.recipeId === recipe.id);
+
+        let warningMsg = `Are you sure you want to delete SKU '${recipe.name}'?`;
+        if (isUsedInWip || isUsedInFG || isUsedInRepair) {
+            warningMsg = `SKU '${recipe.name}' is referenced in active/historical production or finished goods. Deleting this SKU removes it from future production templates, but existing batch serial traceability will remain fully intact. Proceed with deletion?`;
+        }
+
+        if (!confirm(warningMsg)) return;
+
+        setRecipes(prev => prev.filter(r => r.id !== recipe.id));
+        if (editingRecipeId === recipe.id) {
+            handleCancelEditRecipe();
+        }
+        addLogEntry('Deleted SKU', `Deleted SKU '${recipe.name}'.`);
     };
 
     const openFinishModal = (wipItem: WIPItem) => {
@@ -888,7 +1032,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                     <button onClick={() => setRecipeModalOpen(true)} className="flex items-center bg-[#0D0D0D] text-white px-4 py-2 rounded-lg shadow-md hover:bg-[#404040] transition-colors font-bold uppercase tracking-wide text-xs">
                         <PlusIcon /> <span className="ml-2">Manage SKUs</span>
                     </button>
-                    <button onClick={handleOpenWipModal} className="flex items-center bg-blue-600 text-white px-6 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-all transform active:scale-95 font-bold uppercase tracking-wide text-xs">
+                    <button onClick={handleOpenWipModal} className="flex items-center bg-[#205f64] text-[#0D0D0D] px-6 py-2 rounded-lg shadow-md hover:bg-[#498e72] hover:text-white transition-all transform active:scale-95 font-bold uppercase tracking-wide text-xs">
                         <PlusIcon /> <span className="ml-2">Start Production</span>
                     </button>
                 </div>
@@ -898,7 +1042,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                 <input
                     type="text"
                     placeholder="Search by Product SKU..."
-                    className="block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#205f64]"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                 />
@@ -926,7 +1070,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                 <React.Fragment key={item.id}>
                                     <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''} ${isRepair ? 'bg-amber-50 hover:bg-amber-100' : ''}`}>
                                         <td className="p-4 text-center">
-                                            <button onClick={() => setExpandedWipId(isExpanded ? null : item.id)} className="text-gray-400 hover:text-blue-600">
+                                            <button onClick={() => setExpandedWipId(isExpanded ? null : item.id)} className="text-gray-400 hover:text-[#498e72]">
                                                 {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                             </button>
                                         </td>
@@ -938,21 +1082,21 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                             {isRepair ? (
                                                 <span className="bg-amber-200 px-3 py-1 rounded-full text-amber-800 text-xs font-bold">IN REPAIR</span>
                                             ) : (
-                                                <span className="bg-blue-100 px-3 py-1 rounded-full text-blue-800 text-xs font-bold">{item.quantity}</span>
+                                                <span className="bg-[#75c081]/20 px-3 py-1 rounded-full text-[#498e72] text-xs font-bold">{item.quantity}</span>
                                             )}
                                         </td>
                                         <td className="p-4 text-xs text-gray-600">
                                             {isRepair ? (
                                                 <span className="font-mono text-slate-500 font-bold">Repairing Unit: {item.unitId}</span>
                                             ) : (
-                                                recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>• {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)
+                                                recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>â€¢ {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)
                                             )}
                                         </td>
                                         <td className="p-4 text-sm text-gray-500">{new Date(item.timestamp).toLocaleDateString()}</td>
                                         <td className="p-4 text-right">
                                             <div className="flex items-center justify-end space-x-3">
                                                 {/* Always show Swap Serials */}
-                                                <button onClick={() => { setActiveWipItem(item as WIPItem); setIsManageSerialsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-xs font-semibold flex items-center">
+                                                <button onClick={() => { setActiveWipItem(item as WIPItem); setIsManageSerialsModalOpen(true); }} className="text-[#498e72] hover:text-[#205f64] text-xs font-semibold flex items-center">
                                                     <RefreshCw size={14} className="mr-1" /> Swap Serials
                                                 </button>
 
@@ -961,7 +1105,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                                         <ArrowRightIcon className="mr-1" size={14} /> Complete Repair
                                                     </button>
                                                 ) : (
-                                                    <button onClick={() => openFinishModal(item as WIPItem)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-blue-700 transition-colors text-xs font-bold uppercase tracking-wide">
+                                                    <button onClick={() => openFinishModal(item as WIPItem)} className="bg-[#205f64] text-[#0D0D0D] px-3 py-1.5 rounded-lg shadow-sm hover:bg-[#498e72] hover:text-white transition-colors text-xs font-bold uppercase tracking-wide">
                                                         Finish Batch
                                                     </button>
                                                 )}
@@ -1026,6 +1170,112 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
             {/* Modals */}
 
+            {/* Replacement Modal */}
+            {replacementTarget && (
+                <Modal isOpen={isReplacementModalOpen} onClose={() => setIsReplacementModalOpen(false)} title="Select Replacement Component" size="lg">
+                    <div className="space-y-4">
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4">
+                            <p className="text-sm text-yellow-800">
+                                Replacing damaged unit <strong>{replacementTarget.damagedSerial}</strong>.
+                                Select a tested unit from inventory to swap into production.
+                            </p>
+                        </div>
+
+                        {/* Swap Mode Selector */}
+                        {(() => {
+                            const originalGood = receivedGoods.find(og => og.id === replacementTarget.goodId);
+                            const category = originalGood?.category || 'Component';
+                            return (
+                                <div className="flex gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-bold mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSwapMode('same')}
+                                        className={`flex-1 py-1.5 px-3 rounded-md transition-all ${swapMode === 'same' ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}`}
+                                    >
+                                        Same Item ({originalGood?.name || 'Exact Match'})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSwapMode('category')}
+                                        className={`flex-1 py-1.5 px-3 rounded-md transition-all ${swapMode === 'category' ? 'bg-[#205f64] text-[#0D0D0D] shadow-sm font-black' : 'text-slate-500 hover:text-slate-800'}`}
+                                    >
+                                        âš¡ Cross Swap (Same Category: {category})
+                                    </button>
+                                </div>
+                            );
+                        })()}
+
+                        <div className="relative mb-3">
+                            <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                            <input type="text" placeholder="Search replacement serial or item name..." className="w-full border rounded-lg py-2 pl-9 text-sm outline-none focus:ring-2 focus:ring-[#205f64]" value={replacementSearchTerm} onChange={(e) => setReplacementSearchTerm(e.target.value)} />
+                        </div>
+                        <div className="border rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-100 sticky top-0 font-semibold text-gray-700">
+                                    <tr>
+                                        <th className="p-3 border-b">Item & Serial</th>
+                                        <th className="p-3 border-b">Category / Make</th>
+                                        <th className="p-3 border-b">Batch / Invoice</th>
+                                        <th className="p-3 border-b text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {(() => {
+                                        const originalGood = receivedGoods.find(og => og.id === replacementTarget.goodId);
+                                        if (!originalGood) return <tr><td colSpan={4} className="p-4 text-center text-gray-500">Original item not found.</td></tr>;
+
+                                        let candidateBatches: ReceivedGood[] = [];
+                                        if (swapMode === 'same') {
+                                            candidateBatches = receivedGoods.filter(g => g.name.trim().toLowerCase() === originalGood.name.trim().toLowerCase());
+                                        } else {
+                                            const origCat = (originalGood.category || '').trim().toLowerCase();
+                                            candidateBatches = receivedGoods.filter(g => (g.category || '').trim().toLowerCase() === origCat);
+                                        }
+
+                                        const searchLower = replacementSearchTerm.toLowerCase();
+                                        const availableList = candidateBatches.flatMap(batch => {
+                                            return getAvailableSerialsForBatch(batch)
+                                                .filter(s => s.toLowerCase().includes(searchLower) || batch.name.toLowerCase().includes(searchLower) || (batch.makeModel || '').toLowerCase().includes(searchLower))
+                                                .map(sn => ({
+                                                    sn,
+                                                    batchId: batch.id,
+                                                    itemName: batch.name,
+                                                    category: batch.category,
+                                                    makeModel: batch.makeModel,
+                                                    invoice: batch.invoiceNumber,
+                                                    isCross: batch.name.trim().toLowerCase() !== originalGood.name.trim().toLowerCase()
+                                                }));
+                                        });
+
+                                        if (availableList.length === 0) return <tr><td colSpan={4} className="p-4 text-center text-gray-500">No matching replacement serials found in inventory.</td></tr>;
+
+                                        return availableList.map(({ sn, batchId, itemName, category, makeModel, invoice, isCross }) => (
+                                            <tr key={`${batchId}-${sn}`} className={`hover:bg-blue-50 transition-colors ${isCross ? 'bg-amber-50/40' : ''}`}>
+                                                <td className="p-3">
+                                                    <div className="font-mono font-bold text-slate-800 text-xs">{sn}</div>
+                                                    <div className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5">
+                                                        {itemName}
+                                                        {isCross && <span className="text-[9px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-bold uppercase">Cross Swap</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-xs text-gray-500">
+                                                    <div>{category}</div>
+                                                    {makeModel && <div className="text-[10px] text-indigo-600 font-medium">{makeModel}</div>}
+                                                </td>
+                                                <td className="p-3 text-xs text-gray-500">{invoice || 'N/A'}</td>
+                                                <td className="p-3 text-right">
+                                                    <button onClick={() => handleConfirmReplacement(sn, batchId)} className="bg-[#205f64] text-[#0D0D0D] hover:bg-[#498e72] hover:text-white px-3 py-1 rounded text-xs font-bold shadow-sm transition-colors">Select</button>
+                                                </td>
+                                            </tr>
+                                        ));
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             {/* Swap/Manage Serials Overview Modal */}
             {activeWipItem && (
                 <Modal isOpen={isManageSerialsModalOpen} onClose={() => setIsManageSerialsModalOpen(false)} title="Manage Production Serials" size="lg">
@@ -1044,7 +1294,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                     <div className="p-3 bg-white">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                             {(serials as string[]).map(sn => (
-                                                <div key={sn} className="flex justify-between items-center bg-slate-50 border p-2 rounded-md group hover:border-blue-500 transition-colors">
+                                                <div key={sn} className="flex justify-between items-center bg-slate-50 border p-2 rounded-md group hover:border-[#205f64] transition-colors">
                                                     <span className="font-mono text-xs text-slate-700">{sn}</span>
                                                     <button
                                                         onClick={() => handleInitiateReplacement(activeWipItem.id, goodId, sn)}
@@ -1060,60 +1310,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                             );
                         })}
                         <div className="flex justify-end pt-4">
-                            <button onClick={() => setIsManageSerialsModalOpen(false)} className="bg-slate-900 text-white px-6 py-2 rounded-lg font-bold">Done</button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            {/* Replacement Modal (Nested on top of Manage Serials) */}
-            {replacementTarget && (
-                <Modal isOpen={isReplacementModalOpen} onClose={() => setIsReplacementModalOpen(false)} title="Select Replacement Component" size="lg" zIndex="z-[150]">
-                    <div className="space-y-4">
-                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4">
-                            <p className="text-sm text-yellow-800">
-                                Replacing damaged unit <strong>{replacementTarget.damagedSerial}</strong>.
-                                Select a tested unit from inventory to swap into production.
-                            </p>
-                        </div>
-                        <div className="relative mb-3">
-                            <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                            <input type="text" placeholder="Search replacement serial..." className="w-full border rounded-lg py-2 pl-9 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={replacementSearchTerm} onChange={(e) => setReplacementSearchTerm(e.target.value)} />
-                        </div>
-                        <div className="border rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-100 sticky top-0 font-semibold text-gray-700">
-                                    <tr>
-                                        <th className="p-3 border-b">Serial Number</th>
-                                        <th className="p-3 border-b">Batch / Invoice</th>
-                                        <th className="p-3 border-b text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {(() => {
-                                        const originalGood = receivedGoods.find(og => og.id === replacementTarget.goodId);
-                                        const alternativeBatches = receivedGoods.filter(g => g.name === originalGood?.name);
-
-                                        const availableList = alternativeBatches.flatMap(batch => {
-                                            return getAvailableSerialsForBatch(batch)
-                                                .filter(s => s.toLowerCase().includes(replacementSearchTerm.toLowerCase()))
-                                                .map(sn => ({ sn, batchId: batch.id, invoice: batch.invoiceNumber }));
-                                        });
-
-                                        if (availableList.length === 0) return <tr><td colSpan={3} className="p-4 text-center text-gray-500">No matching serials found in inventory.</td></tr>;
-
-                                        return availableList.map(({ sn, batchId, invoice }) => (
-                                            <tr key={`${batchId}-${sn}`} className="hover:bg-blue-50 transition-colors">
-                                                <td className="p-3 font-mono text-slate-800">{sn}</td>
-                                                <td className="p-3 text-xs text-gray-500">{invoice || 'N/A'}</td>
-                                                <td className="p-3 text-right">
-                                                    <button onClick={() => handleConfirmReplacement(sn, batchId)} className="bg-blue-600 text-white hover:bg-blue-700 px-3 py-1 rounded text-xs font-bold shadow-sm transition-colors">Select</button>
-                                                </td>
-                                            </tr>
-                                        ));
-                                    })()}
-                                </tbody>
-                            </table>
+                            <button onClick={() => setIsManageSerialsModalOpen(false)} className="bg-[#0D0D0D] text-white px-6 py-2 rounded-lg font-bold">Done</button>
                         </div>
                     </div>
                 </Modal>
@@ -1129,7 +1326,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                             <label className="block text-sm font-medium text-gray-700">Product SKU (Recipe)</label>
                             <button
                                 onClick={handleCreateRecipeFromDraft}
-                                className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center bg-white px-2 py-1 rounded border border-blue-200 transition-colors"
+                                className="text-[10px] text-[#498e72] hover:text-[#205f64] font-bold flex items-center bg-white px-2 py-1 rounded border border-[#75c081] transition-colors"
                             >
                                 <PlusIcon /> New SKU
                             </button>
@@ -1138,55 +1335,68 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Quantity to Produce</label>
-                        <input type="number" value={quantity} onChange={e => setQuantity(Number(e.target.value))} min="1" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <input type="number" value={quantity} onChange={e => setQuantity(Number(e.target.value))} min="1" className="w-full border rounded-md p-2 focus:ring-2 focus:ring-[#205f64] outline-none" />
                     </div>
 
                     <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-2 mt-4">
                         {componentsForModal.map(comp => (
                             <div key={comp.itemName} className="bg-gray-50 p-3 rounded-md border border-slate-200">
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className="text-sm font-bold text-slate-800">{comp.itemName} <span className="text-gray-400 font-normal">(x{comp.quantityPerUnit}/unit)</span></label>
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${comp.totalAvailableCount >= comp.requiredSerialsCount ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
-                                        Needs: {comp.requiredSerialsCount} | Stock: {comp.totalAvailableCount}
+                                    <label className="text-sm font-bold text-slate-800">{comp.itemName} <span className="text-gray-400 font-normal">(x{comp.quantityPerUnit} {comp.uom}/unit)</span></label>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${comp.totalAvailableCount >= comp.requiredSerialsCount ? 'text-green-700 bg-green-50 border border-green-200' : 'text-red-700 bg-red-50 border border-red-200'}`}>
+                                        Needs: {comp.requiredSerialsCount} {comp.uom} | Stock: {comp.totalAvailableCount} {comp.uom}
                                     </span>
                                 </div>
 
-                                <div className="flex gap-2 mb-2">
-                                    <button
-                                        onClick={() => handleAutoSelectAcrossBatches(comp.itemName, comp.requiredSerialsCount, comp.pooledAvailable)}
-                                        className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-600 hover:text-white font-bold disabled:opacity-50"
-                                        disabled={comp.totalAvailableCount < comp.requiredSerialsCount}
-                                    >
-                                        Auto-Select FIFO
-                                    </button>
-                                    <button onClick={() => {
-                                        const cleared = { ...consumedSerials };
-                                        comp.pooledAvailable.forEach(b => delete cleared[b.good.id]);
-                                        setConsumedSerials(cleared);
-                                    }} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded hover:bg-gray-300 font-bold">Clear</button>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {comp.pooledAvailable.map(batch => (
-                                        <div key={batch.good.id} className="bg-white p-2 border rounded text-xs shadow-sm">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <div>
-                                                    <p className="font-bold text-[10px] text-gray-400 uppercase">Invoice: {batch.good.invoiceNumber || 'Manual'}</p>
-                                                    {batch.good.makeModel && <p className="text-[10px] text-indigo-600 font-bold">{batch.good.makeModel}</p>}
-                                                </div>
-                                                <span className="text-[9px] text-slate-400">{new Date(batch.good.timestamp).toLocaleDateString()}</span>
-                                            </div>
-                                            <select
-                                                multiple
-                                                className="w-full border rounded h-24 font-mono text-[10px] p-1 focus:ring-1 focus:ring-blue-500 outline-none"
-                                                value={consumedSerials[batch.good.id] || []}
-                                                onChange={(e) => handleConsumedSerialsChange(batch.good.id, e.target.selectedOptions)}
+                                {comp.isTracked ? (
+                                    <>
+                                        <div className="flex gap-2 mb-2">
+                                            <button
+                                                onClick={() => handleAutoSelectAcrossBatches(comp.itemName, comp.requiredSerialsCount, comp.pooledAvailable)}
+                                                className="text-[10px] bg-[#205f64]/20 text-[#0D0D0D] px-2 py-1 rounded hover:bg-[#205f64] font-bold disabled:opacity-50"
+                                                disabled={comp.totalAvailableCount < comp.requiredSerialsCount}
                                             >
-                                                {batch.serials.map(sn => <option key={sn} value={sn}>{sn}</option>)}
-                                            </select>
+                                                Auto-Select FIFO
+                                            </button>
+                                            <button onClick={() => {
+                                                const cleared = { ...consumedSerials };
+                                                comp.pooledAvailable.forEach(b => delete cleared[b.good.id]);
+                                                setConsumedSerials(cleared);
+                                            }} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded hover:bg-gray-300 font-bold">Clear</button>
                                         </div>
-                                    ))}
-                                </div>
+
+                                        <div className="space-y-2">
+                                            {comp.pooledAvailable.map(batch => (
+                                                <div key={batch.good.id} className="bg-white p-2 border rounded text-xs shadow-sm">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <div>
+                                                            <p className="font-bold text-[10px] text-gray-400 uppercase">Invoice: {batch.good.invoiceNumber || 'Manual'}</p>
+                                                            {batch.good.makeModel && <p className="text-[10px] text-indigo-600 font-bold">{batch.good.makeModel}</p>}
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-400">{new Date(batch.good.timestamp).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <select
+                                                        multiple
+                                                        className="w-full border rounded h-24 font-mono text-[10px] p-1 focus:ring-1 focus:ring-[#205f64] outline-none"
+                                                        value={consumedSerials[batch.good.id] || []}
+                                                        onChange={(e) => handleConsumedSerialsChange(batch.good.id, e.target.selectedOptions)}
+                                                    >
+                                                        {batch.serials.map(sn => <option key={sn} value={sn}>{sn}</option>)}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="bg-white p-2.5 rounded border border-slate-200 text-xs flex items-center justify-between mt-1">
+                                        <span className="text-slate-600 font-medium italic">
+                                            Quantity-based item ({comp.uom}) â€” Stock will be deducted automatically upon confirmation.
+                                        </span>
+                                        <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${comp.totalAvailableCount >= comp.requiredSerialsCount ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                            {comp.totalAvailableCount >= comp.requiredSerialsCount ? 'Stock Ready' : 'Insufficient Stock'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -1194,22 +1404,24 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                     <div className="flex justify-end pt-4 border-t mt-4 gap-3">
                         <button
                             onClick={handlePrintBOM}
-                            className="bg-white text-slate-900 px-4 py-2.5 rounded-lg font-bold uppercase tracking-wide text-xs shadow-sm border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+                            className="bg-white text-[#0D0D0D] px-4 py-2.5 rounded-lg font-bold uppercase tracking-wide text-xs shadow-sm border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
                         >
                             <Printer size={16} /> Print BOM
                         </button>
-                        <button onClick={handleStartWip} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-black uppercase tracking-widest text-sm shadow-md hover:bg-blue-700 transition-all transform active:scale-95">Confirm & Start Production</button>
+                        <button onClick={handleStartWip} className="bg-[#205f64] text-[#0D0D0D] px-8 py-2.5 rounded-lg font-black uppercase tracking-widest text-sm shadow-md hover:bg-[#498e72] hover:text-white transition-all transform active:scale-95">Confirm & Start Production</button>
                     </div>
                 </div>
             </Modal>
 
             {/* Manage Recipes Modal */}
-            <Modal isOpen={isRecipeModalOpen} onClose={() => setRecipeModalOpen(false)} title="Manage Product SKUs (Recipes)" size="lg">
+            <Modal isOpen={isRecipeModalOpen} onClose={() => { setRecipeModalOpen(false); handleCancelEditRecipe(); }} title="Manage Product SKUs (Recipes)" size="lg">
                 <div className="space-y-6">
                     <div className="p-4 border rounded-lg bg-slate-50 border-slate-200">
-                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusIcon /> Create New SKU</h3>
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            {editingRecipeId ? <><PencilIcon className="h-4 w-4 text-[#205f64]" /> Edit SKU Pattern</> : <><PlusIcon /> Create New SKU</>}
+                        </h3>
                         <div className="space-y-4">
-                            <input type="text" placeholder="SKU Name (e.g. 12V 100Ah Battery Pack)" value={newRecipeName} onChange={e => setNewRecipeName(e.target.value)} className="w-full p-2.5 border rounded-md shadow-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input type="text" placeholder="SKU Name (e.g. 12V 100Ah Battery Pack)" value={newRecipeName} onChange={e => setNewRecipeName(e.target.value)} className="w-full p-2.5 border rounded-md shadow-sm outline-none focus:ring-2 focus:ring-[#205f64]" />
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Components List</h4>
                             {newRecipeComponents.map((comp, index) => (
                                 <div key={index} className="flex gap-2 items-center bg-white p-2 border rounded-lg shadow-sm group">
@@ -1220,35 +1432,72 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                             setNewRecipeComponents(updated);
                                         }} placeholder="Search Master Item Name..." />
                                     </div>
-                                    <div className="w-20">
+                                    <div className="w-28 flex items-center gap-1">
                                         <input type="number" placeholder="Qty" value={comp.quantityPerUnit} onChange={e => {
                                             const updated = [...newRecipeComponents];
                                             updated[index].quantityPerUnit = Number(e.target.value);
                                             setNewRecipeComponents(updated);
-                                        }} className="w-full border rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                                        }} className="w-16 border rounded-md p-2 text-sm outline-none focus:ring-2 focus:ring-[#205f64]" />
+                                        <span className="text-xs font-bold text-slate-500 font-mono">
+                                            {comp.uom || receivedGoods.find(g => g.name === comp.masterItemName || g.id === comp.receivedGoodId)?.uom || 'qty'}
+                                        </span>
                                     </div>
                                     <button onClick={() => setNewRecipeComponents(newRecipeComponents.filter((_, i) => i !== index))} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><TrashIcon /></button>
                                 </div>
                             ))}
-                            <button onClick={() => setNewRecipeComponents([...newRecipeComponents, { masterItemName: '', quantityPerUnit: 1 }])} className="text-blue-600 text-xs font-bold hover:underline py-1">+ Add Component Item</button>
-                            <div className="flex justify-end pt-2 border-t mt-2"><button onClick={handleSaveRecipe} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 transition-colors uppercase tracking-wide text-xs">Save Product SKU</button></div>
+                            <button onClick={() => setNewRecipeComponents([...newRecipeComponents, { masterItemName: '', quantityPerUnit: 1 }])} className="text-[#498e72] text-xs font-bold hover:underline py-1">+ Add Component Item</button>
+                            <div className="flex justify-end gap-2 pt-2 border-t mt-2">
+                                {editingRecipeId && (
+                                    <button onClick={handleCancelEditRecipe} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors text-xs uppercase">Cancel Edit</button>
+                                )}
+                                <button onClick={handleSaveRecipe} className="bg-[#205f64] text-[#0D0D0D] px-6 py-2 rounded-lg font-bold shadow-md hover:bg-[#498e72] hover:text-white transition-colors uppercase tracking-wide text-xs">
+                                    {editingRecipeId ? 'Update SKU' : 'Save Product SKU'}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <div>
-                        <h3 className="font-bold text-slate-800 mb-3 px-1">Registered SKUs</h3>
+                        <h3 className="font-bold text-slate-800 mb-3 px-1">Registered SKUs ({recipes.length})</h3>
                         <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                             {recipes.map(r => (
-                                <div key={r.id} className="p-3 bg-white border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow group">
+                                <div key={r.id} className={`p-3 border rounded-lg flex justify-between items-center transition-all ${editingRecipeId === r.id ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200' : 'bg-white hover:shadow-md'}`}>
                                     <div>
-                                        <p className="font-bold text-sm text-slate-800">{r.name}</p>
-                                        <div className="flex gap-2 mt-1">
-                                            <p className="text-[10px] text-gray-400 uppercase font-bold">{r.components.filter(c => c.masterItemName || c.receivedGoodId).length} components</p>
+                                        <p className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                                            {r.name}
+                                            {editingRecipeId === r.id && <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase">Editing</span>}
+                                        </p>
+                                        <div className="flex gap-1.5 mt-1.5 items-center flex-wrap">
+                                            {r.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, idx) => {
+                                                const name = c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item');
+                                                const matchedGood = receivedGoods.find(g => g.name === c.masterItemName || g.id === c.receivedGoodId);
+                                                const uom = c.uom || matchedGood?.uom || 'qty';
+                                                return (
+                                                    <span key={idx} className="text-[9px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 font-mono">
+                                                        {name} (x{c.quantityPerUnit} {uom})
+                                                    </span>
+                                                );
+                                            })}
                                             <span className="text-[10px] text-gray-300">|</span>
                                             <p className="text-[10px] text-gray-400 font-mono">{r.id}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => setRecipes(recipes.filter(re => re.id !== r.id))} className="p-2 text-red-100 group-hover:text-red-400 hover:bg-red-50 rounded-full transition-colors"><TrashIcon /></button>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => handleEditRecipe(r)}
+                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                            title="Edit SKU Details & Components"
+                                        >
+                                            <PencilIcon className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteRecipe(r)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Delete SKU Pattern"
+                                        >
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             {recipes.length === 0 && <p className="text-center py-6 text-gray-400 italic text-sm">No recipes defined yet.</p>}
@@ -1260,15 +1509,15 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             {/* Finish Production Modal */}
             {itemToFinish && <Modal isOpen={isFinishModalOpen} onClose={() => setIsFinishModalOpen(false)} title={`Complete Production: ${getRecipeName(itemToFinish.recipeId)}`}>
                 <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-slate-900 text-sm">
+                    <div className="bg-[#205f64]/10 p-4 rounded-lg border border-[#75c081]/50 text-[#0D0D0D] text-sm">
                         <p className="font-bold mb-1">Ready for Release</p>
                         <p>You are moving <strong>{itemToFinish.quantity} units</strong> to Finished Goods. Serial numbers will be permanently mapped to Unit IDs.</p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quality Control Remarks</label>
-                        <textarea value={finishFormData.qualityRemarks} onChange={e => setFinishFormData(p => ({ ...p, qualityRemarks: e.target.value }))} rows={4} placeholder="e.g. All checks passed, balancing verified, output 12.8V nominal..." className="w-full border rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                        <textarea value={finishFormData.qualityRemarks} onChange={e => setFinishFormData(p => ({ ...p, qualityRemarks: e.target.value }))} rows={4} placeholder="e.g. All checks passed, balancing verified, output 12.8V nominal..." className="w-full border rounded-md p-3 text-sm focus:ring-2 focus:ring-[#205f64] outline-none"></textarea>
                     </div>
-                    <div className="flex justify-end pt-4"><button onClick={handleFinishProduction} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg font-black uppercase tracking-widest text-sm shadow-lg hover:bg-blue-700 transition-all transform active:scale-95 flex items-center gap-2"><ArrowRightIcon size={18} className="m-0" /> Release to Inventory</button></div>
+                    <div className="flex justify-end pt-4"><button onClick={handleFinishProduction} className="bg-[#205f64] text-[#0D0D0D] px-8 py-2.5 rounded-lg font-black uppercase tracking-widest text-sm shadow-lg hover:bg-[#498e72] hover:text-white transition-all transform active:scale-95 flex items-center gap-2"><ArrowRightIcon size={18} className="m-0" /> Release to Inventory</button></div>
                 </div>
             </Modal>}
         </div>
@@ -1276,3 +1525,4 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 };
 
 export default WorkInProgress;
+

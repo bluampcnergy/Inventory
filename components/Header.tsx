@@ -66,7 +66,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
   const categories = useMemo(() => ({
     home: ['home'] as View[],
     operations: ['received', 'testing', 'wip', 'dtf', 'finished', 'storage', 'supplies'] as View[],
-    finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_prices', 'finance_maker'] as View[],
+    finance: ['finance_upload', 'finance_dashboard', 'finance_gst', 'finance_expenses', 'finance_prices', 'finance_maker', 'finance_ledger'] as View[],
     admin: ['companies', 'users', 'employee_tasks', 'ai_assistant', 'reports', 'master', 'log'] as View[],
     webmail: ['webmail'] as View[],
     help: ['help'] as View[],
@@ -331,6 +331,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView, username, userRol
                   </>
                 )}
                 <SubNavButton isActive={currentView === 'finance_expenses'} onClick={() => setView('finance_expenses')}>Expenses</SubNavButton>
+                <SubNavButton isActive={currentView === 'finance_ledger'} onClick={() => setView('finance_ledger')}>Accounts Ledger</SubNavButton>
               </>
             )}
 

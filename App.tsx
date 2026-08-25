@@ -433,7 +433,7 @@ const App: React.FC = () => {
     // Handle Finance Sub-routes
     if (view.startsWith('finance_')) {
         const tab = view.replace('finance_', '') as any;
-        if (currentUser?.role !== 'admin' && tab !== 'maker' && tab !== 'expenses') {
+        if (currentUser?.role !== 'admin' && tab !== 'maker' && tab !== 'expenses' && tab !== 'ledger') {
             return <div className="text-center p-8 text-red-600 font-semibold">Access Denied: Director Admins Only</div>;
         }
         return <InvoiceModule 
@@ -572,8 +572,13 @@ const App: React.FC = () => {
             suppliesRecords={suppliesRecords}
             setSuppliesRecords={setSuppliesRecords}
             companyProfiles={companyProfiles}
+            setCompanyProfiles={setCompanyProfiles}
+            receivedGoods={receivedGoods}
+            setReceivedGoods={setReceivedGoods}
+            recipes={recipes}
             addLogEntry={addLogEntry}
             currentUser={currentUser}
+            setView={setView}
         />;
 
       case 'reports':
@@ -644,7 +649,7 @@ const App: React.FC = () => {
         );
 
       case 'webmail':
-        return <Webmail currentUser={currentUser} />;
+        return <Webmail currentUser={currentUser} addLogEntry={addLogEntry} />;
 
       case 'help':
         return <HelpGuide setView={setView} userRole={currentUser?.role} />;
@@ -682,6 +687,32 @@ const App: React.FC = () => {
               rooms={rooms}
               storageUnits={storageUnits}
               storageItems={storageItems}
+           />
+        </div>
+      );
+  }
+
+  // --- WEBMAIL COMPOSE IFRAME ROUTE ---
+  if (mode === 'webmail_compose' || mode === 'webmail') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const to = urlParams.get('to') || '';
+      const cc = urlParams.get('cc') || '';
+      const subject = urlParams.get('subject') || '';
+      const body = urlParams.get('body') || '';
+
+      return (
+        <div className="min-h-screen bg-slate-900 p-2 sm:p-4">
+           <Webmail 
+              currentUser={currentUser}
+              addLogEntry={addLogEntry}
+              isIframe={true}
+              initialCompose={{
+                to,
+                cc,
+                subject,
+                body,
+                isOpen: true
+              }}
            />
         </div>
       );

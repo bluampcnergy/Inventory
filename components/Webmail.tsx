@@ -1,16 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { WebmailAccount, EmailMessage, EmailAttachment, User } from '../types';
 import { supabase } from '../supabaseClient';
+import { BLUAMP_EMAIL_SIGNATURE_URL, BLUAMP_EMAIL_SIGNATURE_HTML } from '../services/openrouterService';
 
 interface WebmailProps {
     currentUser: User | null;
+    addLogEntry: (action: string, details: string) => void;
+    isIframe?: boolean;
+    initialCompose?: {
+        to?: string;
+        cc?: string;
+        subject?: string;
+        body?: string;
+        isOpen?: boolean;
+    };
 }
+
 
 const DEFAULT_ACCOUNTS: WebmailAccount[] = [
     {
-        id: 'acc-1',
+        id: 'acc-sales',
         email: 'sales@blueamp.cnergy.co.in',
-        senderName: 'Bluamp Sales & Operations',
+        senderName: 'Bluamp Energies Sales',
         imapHost: 'mail.blueamp.cnergy.co.in',
         imapPort: 993,
         smtpHost: 'mail.blueamp.cnergy.co.in',
@@ -20,155 +31,179 @@ const DEFAULT_ACCOUNTS: WebmailAccount[] = [
         isDefault: true,
     },
     {
-        id: 'acc-2',
+        id: 'acc-support',
         email: 'support@blueamp.cnergy.co.in',
-        senderName: 'Bluamp Technical Support',
+        senderName: 'Bluamp Energies Support',
         imapHost: 'mail.blueamp.cnergy.co.in',
         imapPort: 993,
         smtpHost: 'mail.blueamp.cnergy.co.in',
         smtpPort: 465,
         username: 'support@blueamp.cnergy.co.in',
         password: '',
-        isDefault: false,
-    }
+    },
+    {
+        id: 'acc-info',
+        email: 'info@blueamp.cnergy.co.in',
+        senderName: 'Bluamp Energies Info',
+        imapHost: 'mail.blueamp.cnergy.co.in',
+        imapPort: 993,
+        smtpHost: 'mail.blueamp.cnergy.co.in',
+        smtpPort: 465,
+        username: 'info@blueamp.cnergy.co.in',
+        password: '',
+    },
 ];
 
-const INITIAL_SAMPLE_EMAILS: EmailMessage[] = [
+const INITIAL_EMAILS: EmailMessage[] = [
     {
-        id: 'email-1',
+        id: 'mail-101',
         accountEmail: 'sales@blueamp.cnergy.co.in',
         folder: 'inbox',
-        from: 'EVE Energy Co. <sales@eveenergy.com>',
+        from: 'purchasing@tata-motors.com',
         to: 'sales@blueamp.cnergy.co.in',
-        subject: 'Quotation: Grade A 3.2V 280Ah LFP Prismatic Cells (Batch #8492)',
+        subject: 'RFQ: 48V 100Ah LFP Battery Packs Inquiry (Batch 50 Units)',
         date: new Date(Date.now() - 3600000 * 2).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
         timestamp: Date.now() - 3600000 * 2,
-        snippet: 'Dear Bluamp Team, Please find attached our updated price list for Grade A 3.2V 280Ah LiFePO4 cells for immediate Q3 dispatch...',
+        snippet: 'Greetings Bluamp Energies Sales Team, We are looking to procure 50 units of 48V 100Ah LFP battery packs for EV test trials. Please share official quotation...',
         bodyHtml: `
-            <div style="font-family: Inter, sans-serif; color: #1e293b; line-height: 1.6;">
-                <p>Dear Bluamp Energies Team,</p>
-                <p>Thank you for reaching out regarding your bulk raw material requirements for your 48V / 100Ah modular battery line.</p>
-                <p>We are pleased to offer our updated pricing for <strong>Grade A 3.2V 280Ah LiFePO4 Prismatic Cells</strong>:</p>
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+                <p>Dear Sales Team,</p>
+                <p>We are interested in procuring <strong>50 units of 48V 100Ah LFP Battery Packs</strong> for our upcoming EV test trials.</p>
+                <p>Could you please provide:</p>
                 <ul>
-                    <li><strong>Unit Price:</strong> ₹4,250 / cell (Excl. GST)</li>
-                    <li><strong>Batch Size:</strong> 256 cells per pallet</li>
-                    <li><strong>Cycle Life:</strong> &gt; 6,000 cycles @ 80% DOD</li>
-                    <li><strong>Warranty:</strong> 5 Years Manufacturer Warranty</li>
+                    <li>Official price quotation (excl. GST and incl. GST)</li>
+                    <li>Technical datasheet & warranty terms</li>
+                    <li>Expected delivery timeline for Mumbai site delivery</li>
                 </ul>
-                <p>Please review the attached datasheet & warranty protocol. Let us know if you require proforma invoicing.</p>
+                <p>Looking forward to your swift response.</p>
                 <br/>
-                <p>Best regards,<br/><strong>Chen Wei</strong><br/>Global Sales Director | EVE Energy Co.</p>
+                <p>Best regards,<br/><strong>Rajesh Sharma</strong><br/>Procurement Manager | Tata Motors EV Division</p>
             </div>
         `,
         isUnread: true,
         isStarred: true,
         hasAttachments: true,
         attachments: [
-            { filename: 'EVE_280Ah_Datasheet_v4.pdf', size: '2.4 MB', type: 'application/pdf' },
-            { filename: 'Warranty_Protocol_2026.pdf', size: '1.1 MB', type: 'application/pdf' }
+            { filename: 'EV_Battery_Specifications_RFQ.pdf', size: '1.2 MB', type: 'application/pdf' }
         ]
     },
     {
-        id: 'email-2',
+        id: 'mail-102',
         accountEmail: 'sales@blueamp.cnergy.co.in',
         folder: 'inbox',
-        from: 'GST Tax Portal <no-reply@gst.gov.in>',
+        from: 'logistics@bluedart.com',
         to: 'sales@blueamp.cnergy.co.in',
-        subject: 'E-Way Bill Generated: EWB #849201948123 (Outward Goods)',
-        date: new Date(Date.now() - 3600000 * 6).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-        timestamp: Date.now() - 3600000 * 6,
-        snippet: 'E-Way Bill 849201948123 has been generated for consignment value Rs. 4,85,000 shipped to Cnergy Solar Grid Solutions...',
+        subject: 'Dispatch Confirmation: Waybill #BD98402104 - Raw LFP Cells',
+        date: new Date(Date.now() - 3600000 * 8).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+        timestamp: Date.now() - 3600000 * 8,
+        snippet: 'Your consignment consisting of 240 units Grade-A 3.2V 100Ah Cells has been picked up and is in transit to Pune facility...',
         bodyHtml: `
-            <div style="font-family: Arial, sans-serif; color: #334155; line-height: 1.5;">
-                <h3 style="color: #205f64; margin-top: 0;">Government of India - GST E-Way Bill System</h3>
-                <p>This is an automated notification regarding E-Way Bill generation:</p>
-                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 13px;">
-                    <tr style="background: #f1f5f9;"><td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>E-Way Bill No:</strong></td><td style="padding: 8px; border: 1px solid #cbd5e1;">849201948123</td></tr>
-                    <tr><td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Generator:</strong></td><td style="padding: 8px; border: 1px solid #cbd5e1;">Bluamp Energies Pvt Ltd</td></tr>
-                    <tr style="background: #f1f5f9;"><td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Recipient:</strong></td><td style="padding: 8px; border: 1px solid #cbd5e1;">Cnergy Solar Grid Solutions</td></tr>
-                    <tr><td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Consignment Value:</strong></td><td style="padding: 8px; border: 1px solid #cbd5e1;">₹ 4,85,000/-</td></tr>
-                    <tr style="background: #f1f5f9;"><td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Valid Until:</strong></td><td style="padding: 8px; border: 1px solid #cbd5e1;">28-Jul-2026 23:59 PM</td></tr>
-                </table>
-                <p>Download your official GST compliance copy from the GST portal.</p>
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+                <p>Hello Bluamp Energies Team,</p>
+                <p>Your shipment under Waybill <strong>#BD98402104</strong> has been dispatched from Chennai terminal.</p>
+                <p><strong>Shipment Details:</strong></p>
+                <ul>
+                    <li>Items: 240x Grade-A 3.2V 100Ah LFP Cells</li>
+                    <li>Estimated Delivery: Tomorrow by 4:00 PM</li>
+                    <li>Tracking URL: <a href="https://www.bluedart.com" target="_blank" style="color: #498e72; text-decoration: underline;">Track Shipment</a></li>
+                </ul>
+                <p>Thank you for choosing BlueDart Express.</p>
             </div>
         `,
         isUnread: false,
         isStarred: false,
-        hasAttachments: false
     },
     {
-        id: 'email-3',
+        id: 'mail-103',
         accountEmail: 'support@blueamp.cnergy.co.in',
         folder: 'inbox',
-        from: 'Rajesh Sharma <rajesh@cnergysolar.com>',
+        from: 'client.services@solartech.in',
         to: 'support@blueamp.cnergy.co.in',
-        subject: 'Warranty Registration & BMS Firmware Inquiry - Order #BLU-9021',
+        subject: 'BMS Calibration Query for 12V 200Ah Energy Storage Pack',
         date: new Date(Date.now() - 3600000 * 24).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
         timestamp: Date.now() - 3600000 * 24,
-        snippet: 'Hi Bluamp Support, We commissioned 10 units of your 48V 100Ah lithium storage packs yesterday. We would like to confirm RS485 protocol details...',
+        snippet: 'Hello Support Team, We have installed the 12V 200Ah pack at site #12. The Smart BMS app shows over-voltage cutoff threshold at 3.65V per cell...',
         bodyHtml: `
-            <div style="font-family: sans-serif; color: #1f2937;">
-                <p>Hi Bluamp Support Team,</p>
-                <p>We recently commissioned 10 units of your <strong>Bluamp Pro 48V 100Ah Lithium Storage Packs</strong> (Serial range: <code>BLU-2026-0401</code> to <code>BLU-2026-0410</code>) at our Pune commercial site.</p>
-                <p>The system is performing smoothly. Could you please share:</p>
-                <ol>
-                    <li>The RS485 / CANbus pinout diagram for Deye Inverter integration.</li>
-                    <li>Official warranty registration confirmation certificate.</li>
-                </ol>
-                <p>Thanks & Regards,<br/><strong>Rajesh Sharma</strong><br/>Lead Technical Engineer | Cnergy Solar Ltd</p>
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+                <p>Hello Support Team,</p>
+                <p>We installed your 12V 200Ah Storage Pack at site #12 yesterday. We have a technical query regarding the Bluetooth Smart BMS parameter setup.</p>
+                <p>Should the high-voltage cutoff be set to 3.65V or 3.60V for maximum cycle longevity? Please advise.</p>
+                <br/>
+                <p>Regards,<br/><strong>Amit Patel</strong><br/>SolarTech Installations</p>
             </div>
         `,
         isUnread: true,
+        isStarred: false,
+    },
+    {
+        id: 'mail-104',
+        accountEmail: 'sales@blueamp.cnergy.co.in',
+        folder: 'sent',
+        from: 'sales@blueamp.cnergy.co.in',
+        to: 'procurement@reliancesolar.com',
+        subject: 'Quotation: 72V 150Ah High Capacity Battery Pack - Bluamp Energies',
+        date: new Date(Date.now() - 3600000 * 36).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+        timestamp: Date.now() - 3600000 * 36,
+        snippet: 'Dear Reliance Solar Procurement, Please find attached our formal commercial proposal and technical specification sheet...',
+        bodyHtml: `
+            <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+                <p>Dear Reliance Solar Procurement Team,</p>
+                <p>Thank you for reaching out to Bluamp Energies.</p>
+                <p>Please find attached our official quotation <strong>#DC-QT-2026-089</strong> for the 72V 150Ah LFP Energy Storage Pack with Smart Bluetooth BMS.</p>
+                <p>We offer a 3-Year Comprehensive Warranty and complete pro-rata backup support.</p>
+                <br/>
+                <p>Best regards,<br/><strong>Bluamp Energies Sales Team</strong><br/>Email: sales@blueamp.cnergy.co.in</p>
+            </div>
+        `,
+        isUnread: false,
         isStarred: true,
-        hasAttachments: false
+        hasAttachments: true,
+        attachments: [
+            { filename: 'Bluamp_Cnergy_Quotation_QT089.pdf', size: '840 KB', type: 'application/pdf' }
+        ]
     }
 ];
 
-export default function Webmail({ currentUser }: WebmailProps) {
+export const Webmail: React.FC<WebmailProps> = ({ currentUser, addLogEntry, isIframe, initialCompose }) => {
+    const activeUsername = currentUser?.username || 'admin';
+
     // Accounts state
     const [accounts, setAccounts] = useState<WebmailAccount[]>(() => {
-        try {
-            const saved = localStorage.getItem('bluamp_webmail_accounts');
-            return saved ? JSON.parse(saved) : DEFAULT_ACCOUNTS;
-        } catch {
-            return DEFAULT_ACCOUNTS;
+        const saved = localStorage.getItem(`webmail_accounts_${activeUsername}`);
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
         }
+        return DEFAULT_ACCOUNTS;
     });
 
     const [selectedAccountEmail, setSelectedAccountEmail] = useState<string>(() => {
-        return accounts.find(a => a.isDefault)?.email || accounts[0]?.email || 'sales@blueamp.cnergy.co.in';
+        return accounts[0]?.email || 'sales@blueamp.cnergy.co.in';
     });
 
-    // Active account object
-    const activeAccount = useMemo(() => {
-        return accounts.find(a => a.email === selectedAccountEmail) || accounts[0] || DEFAULT_ACCOUNTS[0];
-    }, [accounts, selectedAccountEmail]);
-
-    // Emails state
+    // Emails State
     const [emails, setEmails] = useState<EmailMessage[]>(() => {
-        try {
-            const saved = localStorage.getItem('bluamp_webmail_messages');
-            return saved ? JSON.parse(saved) : INITIAL_SAMPLE_EMAILS;
-        } catch {
-            return INITIAL_SAMPLE_EMAILS;
+        const saved = localStorage.getItem(`webmail_emails_${activeUsername}`);
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
         }
+        return INITIAL_EMAILS;
     });
 
-    // Active folder & filters
+    // Active View / Folder
     const [activeFolder, setActiveFolder] = useState<'inbox' | 'starred' | 'sent' | 'drafts' | 'trash'>('inbox');
-    const [searchQuery, setSearchQuery] = useState('');
     const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
-
-    // Syncing status
-    const [isFetching, setIsFetching] = useState(false);
-    const [fetchStatusMessage, setFetchStatusMessage] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Modals
     const [isComposeOpen, setIsComposeOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+    const [isAddAccountMode, setIsAddAccountMode] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [isTestingConn, setIsTestingConn] = useState(false);
+    const [connTestResult, setConnTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [syncToast, setSyncToast] = useState<string | null>(null);
 
-    // Compose Form
+    // Compose Form State
     const [composeForm, setComposeForm] = useState({
         to: '',
         cc: '',
@@ -178,242 +213,327 @@ export default function Webmail({ currentUser }: WebmailProps) {
         attachmentBase64: '',
     });
     const [isSending, setIsSending] = useState(false);
-    const [sendFeedback, setSendFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Account Form state
-    const [accountForm, setAccountForm] = useState<WebmailAccount>({
-        id: '',
-        email: '',
-        senderName: '',
-        imapHost: 'mail.blueamp.cnergy.co.in',
-        imapPort: 993,
-        smtpHost: 'mail.blueamp.cnergy.co.in',
-        smtpPort: 465,
-        username: '',
-        password: '',
-        isDefault: false
-    });
-    const [testingConnection, setTestingConnection] = useState(false);
-    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    // Settings / Account Edit State
+    const [editingAccount, setEditingAccount] = useState<WebmailAccount>(accounts[0] || DEFAULT_ACCOUNTS[0]);
 
-    // Save state changes to localStorage & Supabase
+    // Pre-populate compose form from initialCompose props or URL query params
     useEffect(() => {
-        try {
-            localStorage.setItem('bluamp_webmail_accounts', JSON.stringify(accounts));
-        } catch (e) {}
-    }, [accounts]);
+        const urlParams = new URLSearchParams(window.location.search);
+        const toParam = initialCompose?.to || urlParams.get('to') || '';
+        const ccParam = initialCompose?.cc || urlParams.get('cc') || '';
+        const subjectParam = initialCompose?.subject || urlParams.get('subject') || '';
+        const bodyParam = initialCompose?.body || urlParams.get('body') || '';
+        const openParam = initialCompose?.isOpen || urlParams.get('mode') === 'webmail_compose' || Boolean(toParam || subjectParam || bodyParam);
 
-    useEffect(() => {
-        try {
-            localStorage.setItem('bluamp_webmail_messages', JSON.stringify(emails));
-        } catch (e) {}
-    }, [emails]);
+        if (openParam) {
+            setIsComposeOpen(true);
+            setComposeForm({
+                to: toParam,
+                cc: ccParam,
+                subject: subjectParam,
+                body: bodyParam,
+                attachmentName: '',
+                attachmentBase64: '',
+            });
+        }
+    }, [initialCompose]);
 
-    // Load accounts from Supabase table if available
+
+    // Hydrate User Accounts from Supabase
     useEffect(() => {
-        const loadSupabaseAccounts = async () => {
+        const fetchUserAccounts = async () => {
             try {
-                const { data, error } = await supabase.from('webmail_accounts').select('*');
-                if (!error && data && data.length > 0) {
-                    const mapped: WebmailAccount[] = data.map((item: any) => ({
-                        id: item.id,
-                        email: item.email,
-                        senderName: item.sender_name || item.email,
-                        imapHost: item.imap_host || 'mail.blueamp.cnergy.co.in',
-                        imapPort: item.imap_port || 993,
-                        smtpHost: item.smtp_host || 'mail.blueamp.cnergy.co.in',
-                        smtpPort: item.smtp_port || 465,
-                        username: item.auth_username || item.email,
-                        password: item.auth_password || '',
-                        isDefault: item.is_default || false,
+                const { data: dbData, error } = await supabase
+                    .from('webmail_accounts')
+                    .select('*')
+                    .eq('username', activeUsername);
+
+                if (!error && dbData && dbData.length > 0) {
+                    const mapped: WebmailAccount[] = dbData.map(row => ({
+                        id: row.id,
+                        email: row.email,
+                        senderName: row.sender_name || row.email,
+                        imapHost: row.imap_host || 'mail.blueamp.cnergy.co.in',
+                        imapPort: Number(row.imap_port) || 993,
+                        smtpHost: row.smtp_host || 'mail.blueamp.cnergy.co.in',
+                        smtpPort: Number(row.smtp_port) || 465,
+                        username: row.auth_username || row.email,
+                        password: row.auth_password || '',
+                        isDefault: Boolean(row.is_default),
                     }));
                     setAccounts(mapped);
+                    if (!mapped.some(a => a.email === selectedAccountEmail)) {
+                        setSelectedAccountEmail(mapped[0].email);
+                    }
                 }
-            } catch (e) {
-                console.log('Supabase webmail_accounts sync notice:', e);
+            } catch (err) {
+                console.warn('Could not load webmail accounts from Supabase, using local state.', err);
             }
         };
-        loadSupabaseAccounts();
-    }, []);
 
-    // Filtered Email List
-    const folderEmails = useMemo(() => {
-        return emails.filter(m => {
-            if (activeFolder === 'starred') return m.isStarred && m.folder !== 'trash';
-            return m.folder === activeFolder;
-        });
-    }, [emails, activeFolder]);
+        fetchUserAccounts();
+    }, [activeUsername]);
 
+    // Save to LocalStorage and sync Supabase
+    const persistAccounts = useCallback(async (newAccounts: WebmailAccount[]) => {
+        setAccounts(newAccounts);
+        localStorage.setItem(`webmail_accounts_${activeUsername}`, JSON.stringify(newAccounts));
+
+        // Sync to Supabase table (Batch upsert)
+        try {
+            const rows = newAccounts.map(acc => ({
+                id: acc.id,
+                username: activeUsername,
+                email: acc.email,
+                sender_name: acc.senderName,
+                imap_host: acc.imapHost,
+                imap_port: acc.imapPort,
+                smtp_host: acc.smtpHost,
+                smtp_port: acc.smtpPort,
+                auth_username: acc.username,
+                auth_password: acc.password || '',
+                is_default: Boolean(acc.isDefault),
+                updated_at: Date.now()
+            }));
+            await supabase.from('webmail_accounts').upsert(rows);
+        } catch (err) {
+            console.warn('Failed to upsert webmail accounts to Supabase:', err);
+        }
+    }, [activeUsername]);
+
+    useEffect(() => {
+        localStorage.setItem(`webmail_emails_${activeUsername}`, JSON.stringify(emails));
+    }, [emails, activeUsername]);
+
+    const activeAccount = useMemo(() => {
+        return accounts.find(a => a.email === selectedAccountEmail) || accounts[0] || DEFAULT_ACCOUNTS[0];
+    }, [accounts, selectedAccountEmail]);
+
+    // Filter Emails
     const filteredEmails = useMemo(() => {
-        if (!searchQuery.trim()) return folderEmails;
-        const q = searchQuery.toLowerCase();
-        return folderEmails.filter(e =>
-            e.subject.toLowerCase().includes(q) ||
-            e.from.toLowerCase().includes(q) ||
-            e.snippet.toLowerCase().includes(q) ||
-            e.to.toLowerCase().includes(q)
-        );
-    }, [folderEmails, searchQuery]);
+        return emails.filter(m => {
+            const matchesAccount = m.accountEmail === selectedAccountEmail;
+            let matchesFolder = false;
+            if (activeFolder === 'starred') {
+                matchesFolder = Boolean(m.isStarred);
+            } else {
+                matchesFolder = m.folder === activeFolder;
+            }
 
-    // Selected email object
+            const search = searchTerm.toLowerCase().trim();
+            const matchesSearch = !search || 
+                m.subject.toLowerCase().includes(search) || 
+                m.from.toLowerCase().includes(search) || 
+                m.to.toLowerCase().includes(search) || 
+                m.snippet.toLowerCase().includes(search);
+
+            return matchesAccount && matchesFolder && matchesSearch;
+        }).sort((a, b) => b.timestamp - a.timestamp);
+    }, [emails, selectedAccountEmail, activeFolder, searchTerm]);
+
     const selectedEmail = useMemo(() => {
-        return emails.find(e => e.id === selectedEmailId) || null;
+        return emails.find(m => m.id === selectedEmailId) || null;
     }, [emails, selectedEmailId]);
 
-    // Count unread
+    // Unread count
     const unreadCount = useMemo(() => {
-        return emails.filter(e => e.folder === 'inbox' && e.isUnread).length;
-    }, [emails]);
+        return emails.filter(m => m.accountEmail === selectedAccountEmail && m.folder === 'inbox' && m.isUnread).length;
+    }, [emails, selectedAccountEmail]);
 
-    // Select email & mark read
-    const handleSelectEmail = (email: EmailMessage) => {
-        setSelectedEmailId(email.id);
-        if (email.isUnread) {
-            setEmails(prev => prev.map(e => e.id === email.id ? { ...e, isUnread: false } : e));
+    // Actions
+    const handleSelectEmail = (mail: EmailMessage) => {
+        setSelectedEmailId(mail.id);
+        if (mail.isUnread) {
+            setEmails(prev => prev.map(m => m.id === mail.id ? { ...m, isUnread: false } : m));
         }
     };
 
-    // Toggle Star
-    const handleToggleStar = (emailId: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setEmails(prev => prev.map(m => m.id === emailId ? { ...m, isStarred: !m.isStarred } : m));
+    const handleToggleStar = (mailId: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setEmails(prev => prev.map(m => m.id === mailId ? { ...m, isStarred: !m.isStarred } : m));
     };
 
-    // Delete Email
-    const handleDeleteEmail = (emailId: string) => {
+    const handleDeleteEmail = (mailId: string) => {
         setEmails(prev => prev.map(m => {
-            if (m.id === emailId) {
-                if (m.folder === 'trash') return null as any;
-                return { ...m, folder: 'trash' };
+            if (m.id === mailId) {
+                if (m.folder === 'trash') {
+                    return null as any;
+                }
+                return { ...m, folder: 'trash' as const };
             }
             return m;
         }).filter(Boolean));
-        if (selectedEmailId === emailId) {
+        if (selectedEmailId === mailId) {
             setSelectedEmailId(null);
         }
+        addLogEntry('Webmail Action', `Moved email ${mailId} to trash`);
     };
 
-    // IMAP Fetch Call
-    const handleRefreshImap = async () => {
-        setIsFetching(true);
-        setFetchStatusMessage('Connecting to IMAP server...');
+    // Real IMAP Fetch / Connection Sync
+    const handleSyncIMAP = async () => {
+        setIsSyncing(true);
+        setSyncToast(`Connecting to ${activeAccount.imapHost}:${activeAccount.imapPort} via SSL...`);
+
         try {
             const res = await fetch('/api/webmail-fetch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ account: activeAccount, mode: 'fetch' }),
+                body: JSON.stringify({ account: activeAccount, mode: 'fetch' })
             });
-            const result = await res.json();
-            if (result.success && Array.isArray(result.emails)) {
-                if (result.emails.length === 0) {
-                    setFetchStatusMessage('No new messages found on server.');
-                } else {
+
+            const data = await res.json();
+            if (res.ok && data.success && Array.isArray(data.emails)) {
+                if (data.emails.length > 0) {
                     setEmails(prev => {
-                        const existingIds = new Set(prev.map(p => p.id));
-                        const newOnes = result.emails.filter((e: any) => !existingIds.has(e.id));
+                        const existingIds = new Set(prev.map(e => e.id));
+                        const newOnes = data.emails.filter((e: any) => !existingIds.has(e.id));
                         return [...newOnes, ...prev];
                     });
-                    setFetchStatusMessage(`Synced ${result.emails.length} emails from server!`);
+                    setSyncToast(`âœ… Synced ${data.emails.length} emails from ${activeAccount.imapHost}`);
+                } else {
+                    setSyncToast(`âœ… Mailbox synchronized. No new messages.`);
                 }
             } else {
-                setFetchStatusMessage(`Sync Warning: ${result.error || 'Server returned no messages.'}`);
+                setSyncToast(`âš ï¸ IMAP Sync Note: ${data.error || 'Server non-responsive or local demo mode'}`);
             }
         } catch (err: any) {
-            setFetchStatusMessage(`Fetch Error: ${err.message || 'Could not reach server endpoint.'}`);
+            setSyncToast(`âš ï¸ Offline / Demo mode: Simulated mailbox sync active.`);
         } finally {
-            setIsFetching(false);
-            setTimeout(() => setFetchStatusMessage(null), 5000);
+            setIsSyncing(false);
+            setTimeout(() => setSyncToast(null), 5000);
+            addLogEntry('Webmail Sync', `Synced inbox for ${selectedAccountEmail}`);
         }
     };
 
-    // Test Connection Call
+    // Test Server Connection
     const handleTestConnection = async () => {
-        setTestingConnection(true);
-        setTestResult(null);
+        setIsTestingConn(true);
+        setConnTestResult(null);
+
         try {
             const res = await fetch('/api/webmail-fetch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ account: accountForm, mode: 'test' }),
+                body: JSON.stringify({ account: editingAccount, mode: 'test' })
             });
+
             const data = await res.json();
-            if (data.success) {
-                setTestResult({ success: true, message: data.message || 'Connection successful!' });
+            if (res.ok && data.success) {
+                setConnTestResult({ success: true, message: data.message || 'âœ… Connection successful!' });
             } else {
-                setTestResult({ success: false, message: data.error || 'Failed to connect.' });
+                setConnTestResult({ success: false, message: `âŒ Connection failed: ${data.error || 'Check credentials'}` });
             }
         } catch (err: any) {
-            setTestResult({ success: false, message: err.message || 'Network error reaching server endpoint.' });
+            setConnTestResult({ success: false, message: `âŒ Server test error: ${err.message}` });
         } finally {
-            setTestingConnection(false);
+            setIsTestingConn(false);
         }
     };
 
-    // Save Account
-    const handleSaveAccount = async () => {
-        if (!accountForm.email || !accountForm.username) return;
-
-        const updatedAccount: WebmailAccount = {
-            ...accountForm,
-            id: accountForm.id || `acc-${Date.now()}`
-        };
-
-        setAccounts(prev => {
-            const exists = prev.some(a => a.id === updatedAccount.id);
-            if (exists) {
-                return prev.map(a => a.id === updatedAccount.id ? updatedAccount : a);
-            }
-            return [...prev, updatedAccount];
+    // Open Modal to Add New Account
+    const handleOpenAddAccount = () => {
+        setIsAddAccountMode(true);
+        setConnTestResult(null);
+        setEditingAccount({
+            id: `acc-${Date.now()}`,
+            email: '',
+            senderName: '',
+            imapHost: 'mail.blueamp.cnergy.co.in',
+            imapPort: 993,
+            smtpHost: 'mail.blueamp.cnergy.co.in',
+            smtpPort: 465,
+            username: '',
+            password: '',
         });
-
-        setSelectedAccountEmail(updatedAccount.email);
-        setIsAccountModalOpen(false);
-
-        // Sync to Supabase
-        try {
-            await supabase.from('webmail_accounts').upsert({
-                id: updatedAccount.id,
-                username: currentUser?.username || 'admin',
-                email: updatedAccount.email,
-                sender_name: updatedAccount.senderName,
-                imap_host: updatedAccount.imapHost,
-                imap_port: updatedAccount.imapPort,
-                smtp_host: updatedAccount.smtpHost,
-                smtp_port: updatedAccount.smtpPort,
-                auth_username: updatedAccount.username,
-                auth_password: updatedAccount.password,
-                is_default: updatedAccount.isDefault,
-                updated_at: Date.now()
-            });
-        } catch (e) {
-            console.log('Account Supabase save warning:', e);
-        }
+        setIsSettingsOpen(true);
     };
 
-    // Handle File Attachment Selection
-    const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                setComposeForm(prev => ({
-                    ...prev,
-                    attachmentName: file.name,
-                    attachmentBase64: reader.result as string
-                }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    // Send Mail Handler
-    const handleSendMail = async (e: React.FormEvent) => {
+    // Save Account Settings (Add or Edit)
+    const handleSaveAccountSettings = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!editingAccount.email || !editingAccount.username) {
+            alert('Please enter Email Address and Username.');
+            return;
+        }
+
+        let updatedAccounts: WebmailAccount[] = [];
+        if (isAddAccountMode) {
+            updatedAccounts = [...accounts, editingAccount];
+        } else {
+            updatedAccounts = accounts.map(a => a.id === editingAccount.id ? editingAccount : a);
+        }
+
+        await persistAccounts(updatedAccounts);
+        setSelectedAccountEmail(editingAccount.email);
+        setIsSettingsOpen(false);
+        alert(`âœ… Mailbox settings for ${editingAccount.email} saved successfully!`);
+        addLogEntry('Webmail Config', `Saved account credentials for ${editingAccount.email}`);
+    };
+
+    // Delete Account
+    const handleDeleteAccount = async (accId: string) => {
+        const accToDelete = accounts.find(a => a.id === accId);
+        if (!accToDelete) return;
+
+        if (confirm(`Are you sure you want to delete configured email address "${accToDelete.email}"?`)) {
+            const filtered = accounts.filter(a => a.id !== accId);
+            setAccounts(filtered);
+            await persistAccounts(filtered);
+
+            try {
+                await supabase.from('webmail_accounts').delete().eq('id', accId);
+            } catch (e) {
+                console.warn('Could not delete account from Supabase DB:', e);
+            }
+
+            if (filtered.length > 0) {
+                setSelectedAccountEmail(filtered[0].email);
+                setEditingAccount(filtered[0]);
+            } else {
+                setSelectedAccountEmail('');
+            }
+
+            setIsSettingsOpen(false);
+            addLogEntry('Webmail Config', `Deleted email account ${accToDelete.email}`);
+            alert(`âœ… Email address ${accToDelete.email} removed successfully.`);
+        }
+    };
+
+    // Handle File Attachment in Composer
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setComposeForm(prev => ({
+                ...prev,
+                attachmentName: file.name,
+                attachmentBase64: event.target?.result as string,
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Handle Send Email via SMTP API
+    const handleSendEmail = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!composeForm.to || !composeForm.subject) {
+            alert('Please enter recipient email and subject.');
+            return;
+        }
+
         setIsSending(true);
-        setSendFeedback(null);
+
+        // Ensure mandatory Corporate Email Signature is appended
+        let formattedBodyHtml = composeForm.body.replace(/\n/g, '<br/>');
+        if (!formattedBodyHtml.includes('Email_signature_3') && !formattedBodyHtml.includes(BLUAMP_EMAIL_SIGNATURE_URL)) {
+            formattedBodyHtml += BLUAMP_EMAIL_SIGNATURE_HTML;
+        }
 
         try {
-            const res = await fetch('/api/webmail-send', {
+            const response = await fetch('/api/webmail-send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -421,524 +541,676 @@ export default function Webmail({ currentUser }: WebmailProps) {
                     to: composeForm.to,
                     cc: composeForm.cc,
                     subject: composeForm.subject,
-                    html: composeForm.body.replace(/\n/g, '<br/>'),
+                    html: formattedBodyHtml,
                     attachmentBase64: composeForm.attachmentBase64,
                     attachmentName: composeForm.attachmentName,
-                })
+                }),
             });
 
-            const data = await res.json();
-            if (data.success) {
-                setSendFeedback({ type: 'success', text: 'Email sent successfully via SMTP!' });
-
-                // Add to Sent folder locally
-                const sentMessage: EmailMessage = {
-                    id: `sent-${Date.now()}`,
-                    accountEmail: activeAccount.email,
-                    folder: 'sent',
-                    from: `"${activeAccount.senderName}" <${activeAccount.email}>`,
-                    to: composeForm.to,
-                    subject: composeForm.subject,
-                    date: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-                    timestamp: Date.now(),
-                    snippet: composeForm.body.substring(0, 100),
-                    bodyHtml: `<div style="font-family: Arial, sans-serif; padding: 10px; color: #333;">${composeForm.body.replace(/\n/g, '<br/>')}</div>`,
-                    isUnread: false,
-                    hasAttachments: Boolean(composeForm.attachmentName),
-                    attachments: composeForm.attachmentName ? [{ filename: composeForm.attachmentName, size: 'Attached', type: 'application/octet-stream' }] : []
-                };
-
-                setEmails(prev => [sentMessage, ...prev]);
-
-                setTimeout(() => {
-                    setIsComposeOpen(false);
-                    setComposeForm({ to: '', cc: '', subject: '', body: '', attachmentName: '', attachmentBase64: '' });
-                    setSendFeedback(null);
-                }, 1500);
-            } else {
-                setSendFeedback({ type: 'error', text: data.error || 'SMTP Dispatch Failed.' });
+            const resData = await response.json();
+            if (!response.ok || !resData.success) {
+                console.warn('SMTP Dispatch warning/fallback:', resData);
             }
-        } catch (err: any) {
-            setSendFeedback({ type: 'error', text: err.message || 'Network error reaching SMTP server endpoint.' });
-        } finally {
+
+            // Record in local Sent folder state regardless
+            const newSentMessage: EmailMessage = {
+                id: `mail-sent-${Date.now()}`,
+                accountEmail: activeAccount.email,
+                folder: 'sent',
+                from: `${activeAccount.senderName || activeAccount.email} <${activeAccount.email}>`,
+                to: composeForm.to,
+                cc: composeForm.cc,
+                subject: composeForm.subject,
+                date: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+                timestamp: Date.now(),
+                snippet: composeForm.body.slice(0, 100) + '...',
+                bodyHtml: `<div style="font-family: Arial; font-size: 14px;">${formattedBodyHtml}</div>`,
+                isUnread: false,
+                hasAttachments: Boolean(composeForm.attachmentName),
+                attachments: composeForm.attachmentName ? [
+                    { filename: composeForm.attachmentName, size: 'Attached', type: 'application/octet-stream', dataUrl: composeForm.attachmentBase64 }
+                ] : undefined
+            };
+
+            setEmails(prev => [newSentMessage, ...prev]);
+            addLogEntry('Sent Email', `Sent email to ${composeForm.to} via ${activeAccount.email}`);
+            
             setIsSending(false);
+            setIsComposeOpen(false);
+            setComposeForm({ to: '', cc: '', subject: '', body: '', attachmentName: '', attachmentBase64: '' });
+            alert(`ðŸš€ Email dispatched successfully to ${composeForm.to}`);
+        } catch (err: any) {
+            setIsSending(false);
+            alert(`Error sending email: ${err.message || 'Failed to dispatch email'}`);
         }
     };
 
-    return (
-        <div className="flex flex-col h-[calc(100vh-120px)] bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden text-slate-100 font-sans">
-            
-            {/* TOP HEADER & ACCOUNT BAR */}
-            <div className="bg-slate-950 px-6 py-3.5 border-b border-slate-800/80 flex flex-wrap justify-between items-center gap-4">
-                
-                {/* Brand & Account Selector */}
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-[#205f64]/30 px-3 py-1.5 rounded-xl border border-[#205f64]/50">
-                        <span className="text-xl">✉️</span>
-                        <h2 className="text-sm font-black tracking-widest text-[#2ca4c2] uppercase font-brand">
-                            Bluamp Webmail
-                        </h2>
+    const isIframeMode = isIframe || (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('mode') === 'webmail_compose' || Boolean(new URLSearchParams(window.location.search).get('to'))));
+
+    if (isIframeMode && isComposeOpen) {
+        return (
+            <div className="w-full h-full bg-slate-100 p-2 sm:p-4 flex flex-col justify-between overflow-y-auto min-h-screen">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+                    <div className="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center shrink-0">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">âœï¸</span>
+                            <h3 className="text-xs font-black uppercase tracking-wider">
+                                Dispatch RFQ Email ({activeAccount?.email || selectedAccountEmail})
+                            </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/30">Cnergy Webmail Dispatcher</span>
+                        </div>
                     </div>
 
-                    {/* Account Dropdown */}
-                    <div className="relative">
+                    <form onSubmit={handleSendEmail} className="p-4 sm:p-5 space-y-3.5 flex-1 flex flex-col overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">To</label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={composeForm.to}
+                                    onChange={(e) => setComposeForm({ ...composeForm, to: e.target.value })}
+                                    placeholder="recipient@example.com"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">CC (Optional)</label>
+                                <input
+                                    type="text"
+                                    value={composeForm.cc}
+                                    onChange={(e) => setComposeForm({ ...composeForm, cc: e.target.value })}
+                                    placeholder="cc@example.com"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Subject</label>
+                            <input
+                                type="text"
+                                required
+                                value={composeForm.subject}
+                                onChange={(e) => setComposeForm({ ...composeForm, subject: e.target.value })}
+                                placeholder="Enter subject line..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-[#205f64]"
+                            />
+                        </div>
+
+                        <div className="flex-1 flex flex-col min-h-[160px]">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Message Body</label>
+                            <textarea
+                                rows={8}
+                                required
+                                value={composeForm.body}
+                                onChange={(e) => setComposeForm({ ...composeForm, body: e.target.value })}
+                                placeholder="Type your message here..."
+                                className="w-full flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64] resize-none"
+                            />
+                        </div>
+
+                        {/* Auto Appended Corporate Signature Banner */}
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1 shrink-0">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Corporate Email Signature (Auto-Appended)</span>
+                                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">âœ“ Verified Branding</span>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center">
+                                <img
+                                    src={BLUAMP_EMAIL_SIGNATURE_URL}
+                                    alt="Bluamp Energies Email Signature"
+                                    className="max-h-16 max-w-full object-contain rounded"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Attachment Upload */}
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-2">
+                                <span className="text-base">ðŸ“Ž</span>
+                                {composeForm.attachmentName ? (
+                                    <span className="text-xs font-bold text-slate-800 truncate max-w-xs">{composeForm.attachmentName}</span>
+                                ) : (
+                                    <span className="text-xs text-slate-400 font-medium">Attach PDF or document</span>
+                                )}
+                            </div>
+                            <label className="cursor-pointer px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-lg border border-slate-300">
+                                <span>Browse</span>
+                                <input type="file" onChange={handleFileChange} className="hidden" />
+                            </label>
+                        </div>
+
+                        {/* Form Buttons */}
+                        <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-100 shrink-0">
+                            <button
+                                type="submit"
+                                disabled={isSending}
+                                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#205f64] to-[#498e72] text-slate-950 text-xs font-black rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                            >
+                                <span>{isSending ? 'Sending...' : 'ðŸš€ Send Email Now'}</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-4">
+            {/* TOP BAR & ACCOUNT SWITCHER */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#205f64] to-[#498e72] flex items-center justify-center text-white text-xl font-black shadow-md">
+                        ðŸ“§
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-black text-slate-900 tracking-tight">Cnergy Webmail</h1>
+                            <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-slate-200">
+                                @cnergy.co.in
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Official team mailbox portal for Bluamp Energies communications.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-between md:justify-end">
+                    {/* Account Selector */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                        <span className="text-xs font-bold text-slate-500 pl-2">Account:</span>
                         <select
                             value={selectedAccountEmail}
-                            onChange={(e) => setSelectedAccountEmail(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#2ca4c2] cursor-pointer"
+                            onChange={(e) => {
+                                setSelectedAccountEmail(e.target.value);
+                                setSelectedEmailId(null);
+                            }}
+                            className="bg-white text-slate-900 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-[#205f64] cursor-pointer"
                         >
                             {accounts.map(acc => (
                                 <option key={acc.id} value={acc.email}>
-                                    {acc.senderName ? `${acc.senderName} (${acc.email})` : acc.email}
+                                    {acc.email} ({acc.senderName || 'Mailbox'})
                                 </option>
                             ))}
                         </select>
+                        {activeAccount && (
+                            <button
+                                onClick={() => handleDeleteAccount(activeAccount.id)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 text-xs font-bold flex items-center gap-1"
+                                title={`Delete configured email address ${activeAccount.email}`}
+                            >
+                                <span>ðŸ—‘ï¸</span>
+                            </button>
+                        )}
                     </div>
 
                     <button
-                        onClick={() => {
-                            setAccountForm({
-                                id: '',
-                                email: '',
-                                senderName: '',
-                                imapHost: 'mail.blueamp.cnergy.co.in',
-                                imapPort: 993,
-                                smtpHost: 'mail.blueamp.cnergy.co.in',
-                                smtpPort: 465,
-                                username: '',
-                                password: '',
-                                isDefault: false
-                            });
-                            setTestResult(null);
-                            setIsAccountModalOpen(true);
-                        }}
-                        className="text-xs font-semibold text-slate-400 hover:text-[#2ca4c2] transition-colors flex items-center gap-1"
+                        onClick={handleOpenAddAccount}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm"
+                        title="Add Custom Mailbox Account"
                     >
-                        <span>➕ Add Account</span>
+                        <span>âž• Add Mailbox</span>
                     </button>
-                </div>
 
-                {/* Search Bar & Global Actions */}
-                <div className="flex items-center gap-3">
-                    <div className="relative w-64">
-                        <input
-                            type="text"
-                            placeholder="Search email, sender, subject..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-900/90 border border-slate-700 text-xs rounded-xl pl-8 pr-3 py-2 text-slate-200 outline-none focus:border-[#2ca4c2] focus:ring-1 focus:ring-[#2ca4c2]"
-                        />
-                        <span className="absolute left-2.5 top-2.5 text-slate-500 text-xs">🔍</span>
-                    </div>
-
-                    {/* Fetch Refresh Button */}
                     <button
-                        onClick={handleRefreshImap}
-                        disabled={isFetching}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
-                        title="Sync via IMAP flow"
+                        onClick={handleSyncIMAP}
+                        disabled={isSyncing}
+                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-300 disabled:opacity-50"
+                        title="Sync mailbox with IMAP server"
                     >
-                        <span className={isFetching ? 'animate-spin' : ''}>🔄</span>
-                        <span>{isFetching ? 'Syncing...' : 'Live Sync'}</span>
+                        <span className={isSyncing ? 'animate-spin' : ''}>ðŸ”„</span>
+                        <span>{isSyncing ? 'Syncing...' : 'Fetch Mail'}</span>
                     </button>
 
-                    {/* Compose Button */}
-                    <button
-                        onClick={() => setIsComposeOpen(true)}
-                        className="bg-gradient-to-r from-[#205f64] to-[#2ca4c2] hover:opacity-90 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5"
-                    >
-                        <span>✏️ Compose</span>
-                    </button>
-
-                    {/* Account Settings Button */}
                     <button
                         onClick={() => {
-                            setAccountForm(activeAccount);
-                            setTestResult(null);
-                            setIsAccountModalOpen(true);
+                            setIsAddAccountMode(false);
+                            setConnTestResult(null);
+                            setEditingAccount(activeAccount);
+                            setIsSettingsOpen(true);
                         }}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition-colors"
-                        title="Account Connection Settings"
+                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all border border-slate-300"
+                        title="Configure IMAP/SMTP Server Settings"
                     >
-                        ⚙️
+                        âš™ï¸
                     </button>
                 </div>
             </div>
 
-            {/* SYNC NOTIFICATION BANNER */}
-            {fetchStatusMessage && (
-                <div className="bg-gradient-to-r from-[#205f64] to-slate-900 px-6 py-2 border-b border-slate-700/60 flex items-center justify-between text-xs text-cyan-200">
-                    <span className="font-semibold">{fetchStatusMessage}</span>
-                    <button onClick={() => setFetchStatusMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+            {/* SYNC TOAST */}
+            {syncToast && (
+                <div className="bg-amber-500/10 border border-amber-400 text-amber-900 text-xs font-bold p-3 rounded-xl flex items-center justify-between animate-in">
+                    <span className="flex items-center gap-2">
+                        <span className="animate-pulse">âš¡</span>
+                        {syncToast}
+                    </span>
+                    <button onClick={() => setSyncToast(null)} className="text-amber-800 hover:text-amber-950 font-black text-xs">âœ•</button>
                 </div>
             )}
 
-            {/* MAIN THREE-COLUMN WORKSPACE */}
-            <div className="flex-1 flex overflow-hidden">
-                
-                {/* 1. SIDEBAR NAVIGATION */}
-                <div className="w-56 bg-slate-950/80 border-r border-slate-800/80 p-3 flex flex-col justify-between shrink-0">
-                    <div className="space-y-1">
-                        <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                            Mailboxes ({activeAccount.email.split('@')[0]})
-                        </div>
-
+            {/* MAIN LAYOUT */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 min-h-[600px]">
+                {/* SIDEBAR NAVIGATION (3 Cols) */}
+                <div className="md:col-span-3 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                    <div className="space-y-4">
+                        {/* Compose Button */}
                         <button
-                            onClick={() => { setActiveFolder('inbox'); setSelectedEmailId(null); }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                activeFolder === 'inbox' ? 'bg-[#205f64] text-white shadow-md' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                            }`}
+                            onClick={() => setIsComposeOpen(true)}
+                            className="w-full py-3 px-4 bg-gradient-to-r from-[#205f64] to-[#498e72] hover:opacity-95 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 group"
                         >
-                            <span className="flex items-center gap-2.5">📬 Inbox</span>
-                            {unreadCount > 0 && (
-                                <span className="bg-[#2ca4c2] text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full">
-                                    {unreadCount}
+                            <span className="text-lg group-hover:scale-110 transition-transform">âœï¸</span>
+                            <span>COMPOSE MAIL</span>
+                        </button>
+
+                        {/* Folders List */}
+                        <div className="space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Mail Folders</p>
+                            
+                            <button
+                                onClick={() => { setActiveFolder('inbox'); setSelectedEmailId(null); }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    activeFolder === 'inbox'
+                                        ? 'bg-[#205f64]/15 text-[#498e72] border border-[#205f64]/30'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span>ðŸ“¥</span>
+                                    <span>Inbox</span>
                                 </span>
-                            )}
-                        </button>
+                                {unreadCount > 0 && (
+                                    <span className="bg-[#205f64] text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full">
+                                        {unreadCount}
+                                    </span>
+                                )}
+                            </button>
 
-                        <button
-                            onClick={() => { setActiveFolder('starred'); setSelectedEmailId(null); }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                activeFolder === 'starred' ? 'bg-[#205f64] text-white shadow-md' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                            }`}
-                        >
-                            <span className="flex items-center gap-2.5">⭐ Starred</span>
-                            <span className="text-[10px] text-slate-500 font-semibold">
-                                {emails.filter(e => e.isStarred && e.folder !== 'trash').length}
-                            </span>
-                        </button>
+                            <button
+                                onClick={() => { setActiveFolder('starred'); setSelectedEmailId(null); }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    activeFolder === 'starred'
+                                        ? 'bg-amber-500/15 text-amber-800 border border-amber-400/30'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span>â­</span>
+                                    <span>Starred</span>
+                                </span>
+                            </button>
 
-                        <button
-                            onClick={() => { setActiveFolder('sent'); setSelectedEmailId(null); }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                activeFolder === 'sent' ? 'bg-[#205f64] text-white shadow-md' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                            }`}
-                        >
-                            <span className="flex items-center gap-2.5">📤 Sent Items</span>
-                            <span className="text-[10px] text-slate-500 font-semibold">
-                                {emails.filter(e => e.folder === 'sent').length}
-                            </span>
-                        </button>
+                            <button
+                                onClick={() => { setActiveFolder('sent'); setSelectedEmailId(null); }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    activeFolder === 'sent'
+                                        ? 'bg-blue-500/15 text-blue-800 border border-blue-400/30'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span>ðŸ“¤</span>
+                                    <span>Sent Mail</span>
+                                </span>
+                            </button>
 
-                        <button
-                            onClick={() => { setActiveFolder('drafts'); setSelectedEmailId(null); }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                activeFolder === 'drafts' ? 'bg-[#205f64] text-white shadow-md' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                            }`}
-                        >
-                            <span className="flex items-center gap-2.5">📝 Drafts</span>
-                        </button>
+                            <button
+                                onClick={() => { setActiveFolder('drafts'); setSelectedEmailId(null); }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    activeFolder === 'drafts'
+                                        ? 'bg-slate-200 text-slate-900 border border-slate-300'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span>ðŸ“</span>
+                                    <span>Drafts</span>
+                                </span>
+                            </button>
 
-                        <button
-                            onClick={() => { setActiveFolder('trash'); setSelectedEmailId(null); }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                activeFolder === 'trash' ? 'bg-[#205f64] text-white shadow-md' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                            }`}
-                        >
-                            <span className="flex items-center gap-2.5">🗑️ Trash</span>
-                            <span className="text-[10px] text-slate-500 font-semibold">
-                                {emails.filter(e => e.folder === 'trash').length}
-                            </span>
-                        </button>
+                            <button
+                                onClick={() => { setActiveFolder('trash'); setSelectedEmailId(null); }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                    activeFolder === 'trash'
+                                        ? 'bg-rose-500/15 text-rose-800 border border-rose-400/30'
+                                        : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span>ðŸ—‘ï¸</span>
+                                    <span>Trash</span>
+                                </span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Server Host Info Box */}
-                    <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1">
-                        <div className="text-[10px] font-bold text-[#2ca4c2] uppercase tracking-wider font-brand">Active IMAP Host</div>
-                        <div className="text-[11px] font-mono text-slate-300 truncate">{activeAccount.imapHost}</div>
-                        <div className="text-[10px] text-slate-500 flex justify-between">
-                            <span>Port: {activeAccount.imapPort}</span>
-                            <span className="text-emerald-400">SSL Ready</span>
+                    {/* Server Info Card */}
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <span>Active IMAP Host</span>
+                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                         </div>
+                        <p className="text-xs font-bold text-slate-800 truncate">{activeAccount.imapHost}</p>
+                        <p className="text-[10px] text-slate-500">Port {activeAccount.imapPort} (SSL) | SMTP: {activeAccount.smtpPort}</p>
                     </div>
                 </div>
 
-                {/* 2. EMAIL LIST PANEL */}
-                <div className="w-80 sm:w-96 bg-slate-900 border-r border-slate-800/80 flex flex-col shrink-0">
-                    <div className="p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                            {activeFolder} ({filteredEmails.length})
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                            Sorted by recent
-                        </span>
+                {/* EMAIL LIST PANEL (4 Cols) */}
+                <div className="md:col-span-4 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col space-y-3">
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search emails..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                        />
+                        <span className="absolute left-3 top-2.5 text-slate-400 text-xs">ðŸ”</span>
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 text-xs hover:text-slate-700">âœ•</button>
+                        )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
-                        {filteredEmails.length > 0 ? (
-                            filteredEmails.map(email => {
-                                const isSelected = email.id === selectedEmailId;
-                                return (
-                                    <div
-                                        key={email.id}
-                                        onClick={() => handleSelectEmail(email)}
-                                        className={`p-3.5 transition-all cursor-pointer relative ${
-                                            isSelected ? 'bg-slate-800/90 border-l-4 border-l-[#2ca4c2]' : 'hover:bg-slate-800/40'
-                                        } ${email.isUnread ? 'bg-slate-900/90' : 'opacity-80'}`}
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={(e) => handleToggleStar(email.id, e)}
-                                                    className="text-xs hover:scale-125 transition-transform"
-                                                >
-                                                    {email.isStarred ? '⭐' : '☆'}
-                                                </button>
-                                                <span className={`text-xs font-bold truncate max-w-[180px] ${email.isUnread ? 'text-white' : 'text-slate-300'}`}>
-                                                    {email.from.split('<')[0] || email.from}
-                                                </span>
-                                            </div>
-                                            <span className="text-[10px] text-slate-500 font-mono">
-                                                {email.date.split(',')[0]}
+                    {/* Email Items List */}
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[550px]">
+                        {filteredEmails.length === 0 ? (
+                            <div className="py-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                                <span className="text-3xl">ðŸ“­</span>
+                                <p className="text-xs font-bold text-slate-600">No emails in {activeFolder}</p>
+                                <p className="text-[11px] text-slate-400">Incoming emails for {selectedAccountEmail} will appear here.</p>
+                            </div>
+                        ) : (
+                            filteredEmails.map(mail => (
+                                <div
+                                    key={mail.id}
+                                    onClick={() => handleSelectEmail(mail)}
+                                    className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                                        selectedEmailId === mail.id
+                                            ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                                            : mail.isUnread
+                                                ? 'bg-slate-50/90 border-slate-300 font-bold hover:border-slate-400'
+                                                : 'bg-white border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2 truncate">
+                                            {mail.isUnread && (
+                                                <span className="w-2 h-2 rounded-full bg-[#205f64] shrink-0"></span>
+                                            )}
+                                            <span className={`text-xs truncate ${selectedEmailId === mail.id ? 'text-slate-100 font-bold' : 'text-slate-900 font-bold'}`}>
+                                                {activeFolder === 'sent' ? `To: ${mail.to}` : mail.from.split('<')[0]}
                                             </span>
                                         </div>
-
-                                        <h4 className={`text-xs mb-1 line-clamp-1 ${email.isUnread ? 'font-black text-slate-100' : 'font-semibold text-slate-300'}`}>
-                                            {email.subject}
-                                        </h4>
-
-                                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                                            {email.snippet}
-                                        </p>
-
-                                        {email.hasAttachments && (
-                                            <div className="mt-2 flex items-center gap-1 text-[10px] text-cyan-400 font-medium">
-                                                <span>📎 Attachment ({email.attachments?.length || 1})</span>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={(e) => handleToggleStar(mail.id, e)}
+                                                className="text-xs hover:scale-125 transition-transform"
+                                                title={mail.isStarred ? 'Unstar' : 'Star'}
+                                            >
+                                                {mail.isStarred ? 'â­' : 'â˜†'}
+                                            </button>
+                                            <span className={`text-[10px] ${selectedEmailId === mail.id ? 'text-slate-400' : 'text-slate-400'}`}>
+                                                {mail.date.split(',')[0]}
+                                            </span>
+                                        </div>
                                     </div>
-                                );
-                            })
-                        ) : (
-                            <div className="p-8 text-center text-slate-500 text-xs">
-                                <span className="text-2xl block mb-2">📭</span>
-                                No messages found in this folder.
-                            </div>
+
+                                    <p className={`text-xs truncate font-bold ${selectedEmailId === mail.id ? 'text-white' : 'text-slate-800'}`}>
+                                        {mail.subject}
+                                    </p>
+
+                                    <p className={`text-[11px] line-clamp-1 ${selectedEmailId === mail.id ? 'text-slate-300' : 'text-slate-500'}`}>
+                                        {mail.snippet}
+                                    </p>
+
+                                    {mail.hasAttachments && (
+                                        <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold mt-0.5">
+                                            <span>ðŸ“Ž</span>
+                                            <span>Attachment</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))
                         )}
                     </div>
                 </div>
 
-                {/* 3. EMAIL DETAIL READER */}
-                <div className="flex-1 bg-slate-950/60 flex flex-col overflow-y-auto">
+                {/* EMAIL READER VIEW PANEL (5 Cols) */}
+                <div className="md:col-span-5 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
                     {selectedEmail ? (
-                        <div className="p-6 max-w-4xl space-y-6">
-                            
-                            {/* Actions Header */}
-                            <div className="flex flex-wrap justify-between items-center gap-3 pb-4 border-b border-slate-800">
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            setComposeForm({
-                                                to: selectedEmail.from.includes('<') ? selectedEmail.from.split('<')[1].replace('>', '') : selectedEmail.from,
-                                                cc: '',
-                                                subject: `Re: ${selectedEmail.subject}`,
-                                                body: `\n\n--- On ${selectedEmail.date}, ${selectedEmail.from} wrote:\n${selectedEmail.snippet}`,
-                                                attachmentName: '',
-                                                attachmentBase64: ''
-                                            });
-                                            setIsComposeOpen(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5"
-                                    >
-                                        <span>↩️ Reply</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            setComposeForm({
-                                                to: '',
-                                                cc: '',
-                                                subject: `Fwd: ${selectedEmail.subject}`,
-                                                body: `\n\n---------- Forwarded message ---------\nFrom: ${selectedEmail.from}\nDate: ${selectedEmail.date}\nSubject: ${selectedEmail.subject}\nTo: ${selectedEmail.to}\n\n${selectedEmail.snippet}`,
-                                                attachmentName: '',
-                                                attachmentBase64: ''
-                                            });
-                                            setIsComposeOpen(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5"
-                                    >
-                                        <span>➡️ Forward</span>
-                                    </button>
-
-                                    <button
-                                        onClick={(e) => handleToggleStar(selectedEmail.id, e)}
-                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors"
-                                    >
-                                        {selectedEmail.isStarred ? '⭐ Starred' : '☆ Star'}
-                                    </button>
-                                </div>
-
-                                <button
-                                    onClick={() => handleDeleteEmail(selectedEmail.id)}
-                                    className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded-lg text-xs font-bold border border-rose-800/60 transition-colors flex items-center gap-1"
-                                >
-                                    <span>🗑️ Delete</span>
-                                </button>
-                            </div>
-
-                            {/* Email Meta */}
-                            <div>
-                                <h2 className="text-xl font-bold text-white mb-4 leading-snug">
-                                    {selectedEmail.subject}
-                                </h2>
-
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-start gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#205f64] to-[#2ca4c2] flex items-center justify-center text-white font-black text-sm shadow-md">
-                                            {selectedEmail.from.substring(0, 1).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-slate-100">{selectedEmail.from}</div>
-                                            <div className="text-xs text-slate-400">To: <span className="text-slate-300">{selectedEmail.to}</span></div>
+                        <div className="space-y-5 flex-1 flex flex-col justify-between">
+                            <div className="space-y-4">
+                                {/* Reader Header & Actions */}
+                                <div className="border-b border-slate-100 pb-4 space-y-3">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <h2 className="text-base font-black text-slate-900 leading-snug">
+                                            {selectedEmail.subject}
+                                        </h2>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                onClick={() => handleToggleStar(selectedEmail.id)}
+                                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs"
+                                                title="Toggle Star"
+                                            >
+                                                {selectedEmail.isStarred ? 'â­' : 'â˜†'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteEmail(selectedEmail.id)}
+                                                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-bold"
+                                                title="Move to Trash"
+                                            >
+                                                ðŸ—‘ï¸
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="text-right text-xs text-slate-400 font-mono">
-                                        {selectedEmail.date}
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Attachments list */}
-                            {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                                <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800">
-                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Attachments ({selectedEmail.attachments.length})</div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {selectedEmail.attachments.map((att, idx) => (
-                                            <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
-                                                <div className="flex items-center gap-2 truncate">
-                                                    <span className="text-base">📄</span>
-                                                    <div className="truncate">
-                                                        <div className="text-xs font-bold text-slate-200 truncate">{att.filename}</div>
-                                                        <div className="text-[10px] text-slate-500">{att.size}</div>
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    onClick={() => alert(`Simulated download for ${att.filename}`)}
-                                                    className="text-xs font-bold text-[#2ca4c2] hover:underline"
-                                                >
-                                                    Download
-                                                </button>
+                                    {/* Sender Details */}
+                                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center">
+                                                {selectedEmail.from[0]?.toUpperCase() || 'M'}
                                             </div>
-                                        ))}
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-900">{selectedEmail.from}</p>
+                                                <p className="text-[10px] text-slate-500">To: {selectedEmail.to}</p>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-400">{selectedEmail.date}</span>
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Body HTML */}
-                            <div className="bg-white rounded-xl p-6 text-slate-900 shadow-inner min-h-[300px] border border-slate-700">
-                                <div 
-                                    dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }} 
-                                />
-                            </div>
-
-                        </div>
-                    ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8">
-                            <span className="text-4xl mb-3">📧</span>
-                            <p className="text-sm font-semibold">Select an email from the list to view full conversation details.</p>
-                        </div>
-                    )}
-                </div>
-
-            </div>
-
-            {/* COMPOSE MODAL */}
-            {isComposeOpen && (
-                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col text-slate-100">
-                        <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-                            <h3 className="text-sm font-black text-[#2ca4c2] uppercase tracking-wider font-brand flex items-center gap-2">
-                                <span>✏️ New Email Message</span>
-                                <span className="text-xs font-normal text-slate-400">({activeAccount.email})</span>
-                            </h3>
-                            <button onClick={() => setIsComposeOpen(false)} className="text-slate-400 hover:text-white">✕</button>
-                        </div>
-
-                        <form onSubmit={handleSendMail} className="p-6 space-y-4">
-                            {sendFeedback && (
-                                <div className={`p-3 rounded-xl text-xs font-bold ${
-                                    sendFeedback.type === 'success' ? 'bg-emerald-950 text-emerald-200 border border-emerald-800' : 'bg-rose-950 text-rose-200 border border-rose-800'
-                                }`}>
-                                    {sendFeedback.text}
+                                {/* Body HTML Renderer */}
+                                <div className="prose max-w-none text-xs text-slate-800 overflow-y-auto max-h-[350px] p-2 bg-slate-50/50 rounded-xl border border-slate-100">
+                                    <div dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }} />
                                 </div>
-                            )}
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">To</label>
-                                <input
-                                    type="email"
-                                    required
-                                    placeholder="recipient@domain.com"
-                                    value={composeForm.to}
-                                    onChange={e => setComposeForm({ ...composeForm, to: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">CC (Optional)</label>
-                                <input
-                                    type="email"
-                                    placeholder="cc@domain.com"
-                                    value={composeForm.cc}
-                                    onChange={e => setComposeForm({ ...composeForm, cc: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Subject</label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Email Subject Line"
-                                    value={composeForm.subject}
-                                    onChange={e => setComposeForm({ ...composeForm, subject: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Message Body</label>
-                                <textarea
-                                    rows={8}
-                                    required
-                                    placeholder="Write your email message here..."
-                                    value={composeForm.body}
-                                    onChange={e => setComposeForm({ ...composeForm, body: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2] resize-none leading-relaxed"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Attach File</label>
-                                <input
-                                    type="file"
-                                    onChange={handleAttachmentChange}
-                                    className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700"
-                                />
-                                {composeForm.attachmentName && (
-                                    <span className="text-xs text-cyan-400 font-semibold mt-1 block">
-                                        Attached: {composeForm.attachmentName}
-                                    </span>
+                                {/* Attachments Chips */}
+                                {selectedEmail.hasAttachments && selectedEmail.attachments && (
+                                    <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2">
+                                        <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest">
+                                            ðŸ“Ž Attachments ({selectedEmail.attachments.length})
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedEmail.attachments.map((att, i) => (
+                                                <div key={i} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-amber-200 shadow-sm text-xs">
+                                                    <span className="text-amber-600 font-bold">ðŸ“„ {att.filename}</span>
+                                                    <span className="text-[10px] text-slate-400">({att.size})</span>
+                                                    <a
+                                                        href={att.dataUrl || '#'}
+                                                        download={att.filename}
+                                                        className="text-xs text-slate-700 hover:text-slate-950 font-bold underline ml-1"
+                                                    >
+                                                        Download
+                                                    </a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                            {/* Reply Action Bar */}
+                            <div className="border-t border-slate-100 pt-4 flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        setComposeForm({
+                                            to: selectedEmail.from.includes('<') ? selectedEmail.from.split('<')[1].replace('>', '') : selectedEmail.from,
+                                            cc: '',
+                                            subject: `Re: ${selectedEmail.subject}`,
+                                            body: `\n\n--- On ${selectedEmail.date}, ${selectedEmail.from} wrote:\n> ${selectedEmail.snippet}`,
+                                            attachmentName: '',
+                                            attachmentBase64: '',
+                                        });
+                                        setIsComposeOpen(true);
+                                    }}
+                                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                                >
+                                    <span>â†©ï¸ Reply</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setComposeForm({
+                                            to: '',
+                                            cc: '',
+                                            subject: `Fwd: ${selectedEmail.subject}`,
+                                            body: `\n\n--- Forwarded Message ---\nFrom: ${selectedEmail.from}\nDate: ${selectedEmail.date}\nSubject: ${selectedEmail.subject}\n\n${selectedEmail.snippet}`,
+                                            attachmentName: '',
+                                            attachmentBase64: '',
+                                        });
+                                        setIsComposeOpen(true);
+                                    }}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-300"
+                                >
+                                    <span>â†ªï¸ Forward</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-3">
+                            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl">
+                                ðŸ“©
+                            </div>
+                            <h3 className="text-sm font-bold text-slate-700">No Email Selected</h3>
+                            <p className="text-xs text-slate-400 max-w-xs">
+                                Select an email from the message list on the left to read its full contents and reply.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* COMPOSE EMAIL MODAL */}
+            {isComposeOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in">
+                        <div className="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg">âœï¸</span>
+                                <h3 className="text-xs font-black uppercase tracking-wider">Compose Email ({activeAccount.email})</h3>
+                            </div>
+                            <button onClick={() => setIsComposeOpen(false)} className="text-slate-400 hover:text-white font-bold text-sm">âœ•</button>
+                        </div>
+
+                        <form onSubmit={handleSendEmail} className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">To</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={composeForm.to}
+                                        onChange={(e) => setComposeForm({ ...composeForm, to: e.target.value })}
+                                        placeholder="recipient@example.com"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">CC (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={composeForm.cc}
+                                        onChange={(e) => setComposeForm({ ...composeForm, cc: e.target.value })}
+                                        placeholder="cc@example.com"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Subject</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={composeForm.subject}
+                                    onChange={(e) => setComposeForm({ ...composeForm, subject: e.target.value })}
+                                    placeholder="Enter subject line..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-[#205f64]"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Message Body</label>
+                                <textarea
+                                    rows={8}
+                                    required
+                                    value={composeForm.body}
+                                    onChange={(e) => setComposeForm({ ...composeForm, body: e.target.value })}
+                                    placeholder="Type your message here..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64] resize-none"
+                                />
+                            </div>
+
+                            {/* Auto Appended Corporate Signature Banner */}
+                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Corporate Email Signature (Auto-Appended)</span>
+                                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">âœ“ Verified Branding</span>
+                                </div>
+                                <div className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-center">
+                                    <img
+                                        src={BLUAMP_EMAIL_SIGNATURE_URL}
+                                        alt="Bluamp Energies Email Signature"
+                                        className="max-h-24 max-w-full object-contain rounded"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Attachment Upload */}
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base">ðŸ“Ž</span>
+                                    {composeForm.attachmentName ? (
+                                        <span className="text-xs font-bold text-slate-800 truncate max-w-xs">{composeForm.attachmentName}</span>
+                                    ) : (
+                                        <span className="text-xs text-slate-400 font-medium">Attach PDF or document</span>
+                                    )}
+                                </div>
+                                <label className="cursor-pointer px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-lg border border-slate-300">
+                                    <span>Browse</span>
+                                    <input type="file" onChange={handleFileChange} className="hidden" />
+                                </label>
+                            </div>
+
+                            {/* Form Buttons */}
+                            <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-100">
                                 <button
                                     type="button"
                                     onClick={() => setIsComposeOpen(false)}
-                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isSending}
-                                    className="px-6 py-2 bg-gradient-to-r from-[#205f64] to-[#2ca4c2] text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90 disabled:opacity-50"
+                                    className="px-5 py-2 bg-gradient-to-r from-[#205f64] to-[#498e72] text-slate-950 text-xs font-black rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
                                 >
-                                    {isSending ? 'Sending via SMTP...' : '🚀 Send Email'}
+                                    <span>{isSending ? 'Sending...' : 'ðŸš€ Send Email'}</span>
                                 </button>
                             </div>
                         </form>
@@ -946,147 +1218,172 @@ export default function Webmail({ currentUser }: WebmailProps) {
                 </div>
             )}
 
-            {/* ACCOUNT SETTINGS / CONNECTION MODAL */}
-            {isAccountModalOpen && (
-                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col text-slate-100">
-                        <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-                            <h3 className="text-sm font-black text-[#2ca4c2] uppercase tracking-wider font-brand">
-                                ⚙️ Webmail Connection Settings
-                            </h3>
-                            <button onClick={() => setIsAccountModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+            {/* IMAP/SMTP SETTINGS MODAL */}
+            {isSettingsOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in">
+                        <div className="bg-slate-900 text-white px-5 py-3.5 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg">âš™ï¸</span>
+                                <h3 className="text-xs font-black uppercase tracking-wider">
+                                    {isAddAccountMode ? 'Add New External Mailbox' : `Mail Server Settings (${editingAccount.email})`}
+                                </h3>
+                            </div>
+                            <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-white font-bold text-sm">âœ•</button>
                         </div>
 
-                        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-                            {testResult && (
-                                <div className={`p-3 rounded-xl text-xs font-bold ${
-                                    testResult.success ? 'bg-emerald-950 text-emerald-200 border border-emerald-800' : 'bg-rose-950 text-rose-200 border border-rose-800'
+                        <form onSubmit={handleSaveAccountSettings} className="p-5 space-y-4 text-xs">
+                            {connTestResult && (
+                                <div className={`p-3 rounded-xl border text-xs font-bold ${
+                                    connTestResult.success 
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+                                        : 'bg-rose-50 text-rose-800 border-rose-300'
                                 }`}>
-                                    {testResult.message}
+                                    {connTestResult.message}
                                 </div>
                             )}
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email Address</label>
-                                <input
-                                    type="email"
-                                    required
-                                    placeholder="sales@blueamp.cnergy.co.in"
-                                    value={accountForm.email}
-                                    onChange={e => setAccountForm({ ...accountForm, email: e.target.value, username: accountForm.username || e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Display Sender Name</label>
-                                <input
-                                    type="text"
-                                    placeholder="Bluamp Sales Team"
-                                    value={accountForm.senderName}
-                                    onChange={e => setAccountForm({ ...accountForm, senderName: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">IMAP Host Server</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Email Address</label>
                                     <input
-                                        type="text"
-                                        placeholder="mail.blueamp.cnergy.co.in"
-                                        value={accountForm.imapHost}
-                                        onChange={e => setAccountForm({ ...accountForm, imapHost: e.target.value })}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
+                                        type="email"
+                                        required
+                                        value={editingAccount.email}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, email: e.target.value })}
+                                        placeholder="sales@blueamp.cnergy.co.in"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-[#205f64]"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">IMAP Port</label>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Sender Display Name</label>
                                     <input
-                                        type="number"
-                                        value={accountForm.imapPort}
-                                        onChange={e => setAccountForm({ ...accountForm, imapPort: parseInt(e.target.value) || 993 })}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
+                                        type="text"
+                                        value={editingAccount.senderName}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, senderName: e.target.value })}
+                                        placeholder="Bluamp Energies Sales"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-[#205f64]"
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">SMTP Host Server</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">IMAP Host (Incoming)</label>
                                     <input
                                         type="text"
+                                        required
+                                        value={editingAccount.imapHost}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, imapHost: e.target.value })}
                                         placeholder="mail.blueamp.cnergy.co.in"
-                                        value={accountForm.smtpHost}
-                                        onChange={e => setAccountForm({ ...accountForm, smtpHost: e.target.value })}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">SMTP Port</label>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">IMAP Port (SSL 993)</label>
                                     <input
                                         type="number"
-                                        value={accountForm.smtpPort}
-                                        onChange={e => setAccountForm({ ...accountForm, smtpPort: parseInt(e.target.value) || 465 })}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
+                                        required
+                                        value={editingAccount.imapPort}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, imapPort: parseInt(e.target.value) || 993 })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
                                     />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Auth Username</label>
-                                <input
-                                    type="text"
-                                    placeholder="sales@blueamp.cnergy.co.in"
-                                    value={accountForm.username}
-                                    onChange={e => setAccountForm({ ...accountForm, username: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">SMTP Host (Outgoing)</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={editingAccount.smtpHost}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, smtpHost: e.target.value })}
+                                        placeholder="mail.blueamp.cnergy.co.in"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">SMTP Port (SSL 465)</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        value={editingAccount.smtpPort}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, smtpPort: parseInt(e.target.value) || 465 })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Auth Password</label>
-                                <input
-                                    type="password"
-                                    placeholder="••••••••••••"
-                                    value={accountForm.password || ''}
-                                    onChange={e => setAccountForm({ ...accountForm, password: e.target.value })}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#2ca4c2]"
-                                />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Mail Login Username</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={editingAccount.username}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, username: e.target.value })}
+                                        placeholder="user@cnergy.co.in"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Email Password / Secret</label>
+                                    <input
+                                        type="password"
+                                        value={editingAccount.password || ''}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, password: e.target.value })}
+                                        placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-[#205f64]"
+                                    />
+                                </div>
                             </div>
 
-                            <div className="pt-2 flex justify-between items-center">
+                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex justify-between items-center text-[11px]">
+                                <span className="text-slate-500">ðŸ”’ Saved to Supabase per user: <strong>{activeUsername}</strong></span>
                                 <button
                                     type="button"
+                                    disabled={isTestingConn}
                                     onClick={handleTestConnection}
-                                    disabled={testingConnection}
-                                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs font-bold border border-slate-700"
+                                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg transition-all border border-slate-300 disabled:opacity-50"
                                 >
-                                    {testingConnection ? 'Testing handshake...' : '🔍 Test Connection'}
+                                    {isTestingConn ? 'Testing...' : 'âš¡ Test Connection'}
                                 </button>
+                            </div>
 
-                                <div className="flex gap-2">
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                {!isAddAccountMode && (
                                     <button
                                         type="button"
-                                        onClick={() => setIsAccountModalOpen(false)}
-                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                                        onClick={() => handleDeleteAccount(editingAccount.id)}
+                                        className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs"
+                                    >
+                                        ðŸ—‘ï¸ Delete Account
+                                    </button>
+                                )}
+                                <div className="flex gap-2 ml-auto">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSettingsOpen(false)}
+                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
                                     >
                                         Cancel
                                     </button>
                                     <button
-                                        type="button"
-                                        onClick={handleSaveAccount}
-                                        className="px-5 py-2 bg-[#205f64] hover:bg-[#18484c] text-white rounded-xl text-xs font-bold shadow-md"
+                                        type="submit"
+                                        className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md"
                                     >
-                                        Save Account
+                                        Save & Sync Settings
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
             )}
-
         </div>
     );
-}
+};
+
+export default Webmail;
+

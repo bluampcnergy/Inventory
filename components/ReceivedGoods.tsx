@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ReceivedGood, WIPItem, FinishedGood, CompanyProfile, TestResult, User, ExtractedInvoice, Recipe } from '../types';
 import { ReceivedGoodStatus, EMPTY_INVOICE } from '../types';
@@ -31,24 +31,15 @@ interface ReceivedGoodsProps {
     setInvoiceDraft?: (draft: ExtractedInvoice) => void;
 }
 
-const statusInfo: Record<string, { text: string; color: string }> = {
-    [ReceivedGoodStatus.ND]: { text: 'Not Damaged', color: 'bg-emerald-50 text-emerald-800 border border-emerald-200' },
-    [ReceivedGoodStatus.PR]: { text: 'Partially Received', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
-    [ReceivedGoodStatus.D]: { text: 'Damaged', color: 'bg-rose-50 text-rose-800 border border-rose-200' },
-    [ReceivedGoodStatus.Other]: { text: 'Other', color: 'bg-slate-100 text-slate-800 border border-slate-200' },
-    'Done': { text: 'Done', color: 'bg-blue-50 text-blue-800 border border-blue-200' },
-    'Completed': { text: 'Completed', color: 'bg-blue-50 text-blue-800 border border-blue-200' },
+const statusInfo = {
+    [ReceivedGoodStatus.ND]: { text: 'Not Damaged', color: 'bg-[#75c081]/20 text-[#498e72] border border-[#75c081]/50' },
+    [ReceivedGoodStatus.PR]: { text: 'Partially Received', color: 'bg-yellow-50 text-yellow-800 border border-yellow-200' },
+    [ReceivedGoodStatus.D]: { text: 'Damaged', color: 'bg-red-50 text-red-800 border border-red-200' },
+    [ReceivedGoodStatus.Other]: { text: 'Other', color: 'bg-gray-100 text-gray-800 border border-gray-200' },
 };
 
-const getStatusInfo = (status?: string) => {
-    if (status && statusInfo[status]) {
-        return statusInfo[status];
-    }
-    return { text: status || 'Not Damaged', color: 'bg-sky-50 text-sky-800 border border-sky-200' };
-};
-
-const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[]; initialQuantity?: number; lowStockThresholdPercent?: number; ignoreReplenishment?: boolean } = {
-    name: '', category: '', makeModel: '', supplier: '', quantity: 0, initialQuantity: 0, lowStockThresholdPercent: 20, ignoreReplenishment: false, status: ReceivedGoodStatus.ND, damagedCount: 0, invoiceNumber: '', serials: [], notes: 'actual physical qty = '
+const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[] } = {
+    name: '', category: '', makeModel: '', supplier: '', quantity: 0, initialQuantity: 0, uom: 'qty', lowStockThresholdPercent: 20, isIgnoredForAlerts: false, status: ReceivedGoodStatus.ND, damagedCount: 0, invoiceNumber: '', serials: [], notes: 'actual physical qty = '
 };
 
 const CATEGORIES = ['Cell', 'BMS', 'Bat-misc', 'Nickel Strip', 'Wire', 'Connector', 'Holder', 'Epoxy Sheet', 'Sleeve', 'Tape', 'Screw', 'Cabinet', 'Other'];
@@ -74,6 +65,8 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [filterNotes, setFilterNotes] = useState(false);
+    const [filterLowStock, setFilterLowStock] = useState(false);
+    const [filterIgnored, setFilterIgnored] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [serialEntries, setSerialEntries] = useState<SerialGridRow[]>([]);
@@ -96,6 +89,16 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isAddCompanyModalOpen) {
+                setIsAddCompanyModalOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isAddCompanyModalOpen]);
+
     const handleSupplierChange = (value: string) => {
         if (value === 'ADD_NEW') {
             setIsAddCompanyModalOpen(true);
@@ -104,18 +107,29 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         }
     };
 
-    // Helper to determine if category requires serial tracking
-    const isTrackedCategory = (cat: string) => (cat || '').toLowerCase() === 'cell';
+    // Helper to determine if category requires serial tracking (Only Cells with 'qty' UOM)
+    const isTrackedCategory = (cat: string, uom?: string) => (cat || '').toLowerCase() === 'cell' && (!uom || uom === 'qty');
 
     // Populate form when editing
     useEffect(() => {
         if (editingGood) {
+            let localInitialMap: Record<string, number> = {};
+            try {
+                localInitialMap = JSON.parse(localStorage.getItem('dc_initial_quantity_map') || '{}');
+            } catch (e) {}
+
+            const fixedInitialQty = editingGood.initialQuantity ?? localInitialMap[editingGood.id] ?? editingGood.quantity;
+
             setFormData({
                 name: editingGood.name,
                 category: editingGood.category,
                 makeModel: editingGood.makeModel,
                 supplier: editingGood.supplier,
                 quantity: editingGood.quantity,
+                initialQuantity: fixedInitialQty,
+                uom: editingGood.uom || 'qty',
+                lowStockThresholdPercent: editingGood.lowStockThresholdPercent ?? 20,
+                isIgnoredForAlerts: Boolean(editingGood.isIgnoredForAlerts),
                 status: editingGood.status as ReceivedGoodStatus,
                 damagedCount: editingGood.damagedCount,
                 invoiceNumber: editingGood.invoiceNumber,
@@ -124,14 +138,14 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             });
 
             // Merge Serials with Test Results
-            if (isTrackedCategory(editingGood.category)) {
+            if (isTrackedCategory(editingGood.category, editingGood.uom)) {
                 const entries: SerialGridRow[] = editingGood.serials.map(s => {
                     const tr = testResults.find(r => r.receivedGoodId === editingGood.id && r.serialNumber === s);
                     return {
                         serial: s,
-                        voltage: tr?.voltage?.toString() || '',
-                        resistance: tr?.resistance?.toString() || '',
-                        capacity: tr?.capacity?.toString() || '',
+                        voltage: tr?.voltage !== undefined && tr?.voltage !== null ? String(tr.voltage) : '',
+                        resistance: tr?.resistance !== undefined && tr?.resistance !== null ? String(tr.resistance) : '',
+                        capacity: tr?.capacity !== undefined && tr?.capacity !== null ? String(tr.capacity) : '',
                         grade: tr?.grade || '',
                         location: tr?.location || ''
                     };
@@ -152,9 +166,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         }
     }, [editingGood]);  // FIX #4: Only re-populate when opening a different batch, not on every testResults change
 
-    // Adjust serial entries when quantity changes (Only for Cell)
+    // Adjust serial entries when quantity changes (Only for Cell with 'qty' UOM)
     useEffect(() => {
-        if (!isTrackedCategory(formData.category)) return;
+        if (!isTrackedCategory(formData.category, formData.uom)) return;
 
         const qty = Number(formData.quantity) || 0;
         setSerialEntries(prev => {
@@ -166,7 +180,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                 return [...prev, ...Array(diff).fill(null).map(() => ({ serial: '', voltage: '', resistance: '', capacity: '', grade: '', location: '' }))];
             }
         });
-    }, [formData.quantity, formData.category]);
+    }, [formData.quantity, formData.category, formData.uom]);
 
     // Handle Inventory Import
     useEffect(() => {
@@ -215,30 +229,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         checkImport();
     }, []);
 
-    const [filterLowStock, setFilterLowStock] = useState(false);
-    const [filterIgnored, setFilterIgnored] = useState(false);
-
-    const handleToggleIgnoreReplenishment = (good: ReceivedGood, e?: React.MouseEvent) => {
-        if (e) e.stopPropagation();
-        const newIgnored = !good.ignoreReplenishment;
-        try {
-            const map = JSON.parse(localStorage.getItem('bluamp_ignored_items') || '{}');
-            if (newIgnored) map[good.id] = true;
-            else delete map[good.id];
-            localStorage.setItem('bluamp_ignored_items', JSON.stringify(map));
-        } catch (err) {}
-
-        setReceivedGoods(prev => prev.map(item => item.id === good.id ? { ...item, ignoreReplenishment: newIgnored } : item));
-        addLogEntry(
-            'Update Stock Settings',
-            `${newIgnored ? 'Ignored replenishment for' : 'Re-enabled stock alerts for'} "${good.name}"`
-        );
-    };
-
-    const filteredGoods = (receivedGoods || []).filter(good => {
-        if (!good) return false;
+    const filteredGoods = receivedGoods.filter(good => {
         const term = searchTerm.toLowerCase();
-        const matchesSearch = (good.name || '').toLowerCase().includes(term) ||
+        const matchesSearch = good.name.toLowerCase().includes(term) ||
             (good.category || '').toLowerCase().includes(term) ||
             (good.makeModel || '').toLowerCase().includes(term) ||
             (good.invoiceNumber || '').toLowerCase().includes(term) ||
@@ -247,30 +240,33 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         const matchesCategory = selectedCategory === 'All' || good.category === selectedCategory;
 
         const matchesNotes = !filterNotes || (good.notes && good.notes !== 'actual physical qty = ');
-        const matchesLowStock = !filterLowStock || getItemStockAlertInfo(good).isLowStock;
-        const matchesIgnored = !filterIgnored || Boolean(good.ignoreReplenishment);
+
+        const stockAlert = getItemStockAlertInfo(good);
+        const matchesLowStock = !filterLowStock || stockAlert.isLowStock;
+        const matchesIgnored = !filterIgnored || Boolean(good.isIgnoredForAlerts);
 
         return matchesSearch && matchesCategory && matchesNotes && matchesLowStock && matchesIgnored;
-    }).sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
+    }).sort((a, b) => b.timestamp - a.timestamp);
 
     const handleEditClick = (good: ReceivedGood) => {
         setEditingGood(good);
-        setFormData({
-            name: good.name || '',
-            category: good.category || '',
-            makeModel: good.makeModel || '',
-            supplier: good.supplier || '',
-            quantity: good.quantity || 0,
-            initialQuantity: good.initialQuantity || good.quantity || 0,
-            lowStockThresholdPercent: typeof good.lowStockThresholdPercent === 'number' ? good.lowStockThresholdPercent : 20,
-            ignoreReplenishment: Boolean(good.ignoreReplenishment),
-            status: good.status || ReceivedGoodStatus.ND,
-            damagedCount: good.damagedCount || 0,
-            invoiceNumber: good.invoiceNumber || '',
-            serials: good.serials || [],
-            notes: good.notes || 'actual physical qty = '
-        });
         setIsModalOpen(true);
+    };
+
+    const handleToggleIgnoreReplenish = (good: ReceivedGood) => {
+        const updatedStatus = !good.isIgnoredForAlerts;
+        
+        // Update persistent localStorage map
+        try {
+            const currentMap = JSON.parse(localStorage.getItem('dc_ignored_stock_alerts_map') || '{}');
+            currentMap[good.id] = updatedStatus;
+            localStorage.setItem('dc_ignored_stock_alerts_map', JSON.stringify(currentMap));
+        } catch (e) {
+            console.warn('Failed to save ignored stock map to localStorage', e);
+        }
+
+        setReceivedGoods(prev => prev.map(g => g.id === good.id ? { ...g, isIgnoredForAlerts: updatedStatus } : g));
+        addLogEntry('Updated Replenish Policy', `${good.name}: ${updatedStatus ? 'Ignored (Do Not Replenish)' : 'Active Replenishment'}`);
     };
 
     const handleCreateNew = () => {
@@ -350,9 +346,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const goodId = editingGood ? editingGood.id : `rec-${Date.now()}`;
-        const isCell = isTrackedCategory(formData.category);
+        const isCell = isTrackedCategory(formData.category, formData.uom);
 
-        // Only capture serials if category is Cell
+        // Only capture serials if category is Cell and UOM is 'qty'
         const validSerials = isCell
             ? serialEntries.map(e => e.serial.trim()).filter(s => s !== '')
             : [];
@@ -378,18 +374,40 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             });
         }
 
+        let localInitialMap: Record<string, number> = {};
+        try {
+            localInitialMap = JSON.parse(localStorage.getItem('dc_initial_quantity_map') || '{}');
+        } catch (e) {}
+
+        const initialQty = editingGood 
+            ? (editingGood.initialQuantity || localInitialMap[goodId] || editingGood.quantity || formData.quantity || 1)
+            : (formData.initialQuantity && formData.initialQuantity > 0 ? formData.initialQuantity : (formData.quantity || 1));
+
+        // Sync to persistent localStorage maps
+        try {
+            const currentMap = JSON.parse(localStorage.getItem('dc_ignored_stock_alerts_map') || '{}');
+            currentMap[goodId] = Boolean(formData.isIgnoredForAlerts);
+            localStorage.setItem('dc_ignored_stock_alerts_map', JSON.stringify(currentMap));
+
+            localInitialMap[goodId] = initialQty;
+            localStorage.setItem('dc_initial_quantity_map', JSON.stringify(localInitialMap));
+        } catch (e) {
+            console.warn('Failed to save stock map to localStorage', e);
+        }
+
         // Prepare Received Good
         const newGood: ReceivedGood = {
             ...formData,
             id: goodId,
+            initialQuantity: initialQty,
+            lowStockThresholdPercent: formData.lowStockThresholdPercent ?? 20,
+            isIgnoredForAlerts: Boolean(formData.isIgnoredForAlerts),
             timestamp: editingGood ? editingGood.timestamp : Date.now(),
-            initialQuantity: editingGood?.initialQuantity || formData.initialQuantity || formData.quantity || 1,
-            lowStockThresholdPercent: typeof formData.lowStockThresholdPercent === 'number' ? formData.lowStockThresholdPercent : (editingGood?.lowStockThresholdPercent ?? 20),
             serials: validSerials,
             serialIndexMap: isCell ? serialIndexMap : undefined
         };
 
-        // Prepare Test Results (Only for Cells) — now includes grade/location for round-tripping
+        // Prepare Test Results (Only for Cells) â€” now includes grade/location for round-tripping
         const newTestResults: TestResult[] = [];
         if (isCell) {
             serialEntries.forEach(entry => {
@@ -404,9 +422,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                         receivedGoodId: goodId,
                         serialNumber: entry.serial,
                         category: 'Cell',
-                        voltage: entry.voltage ? parseFloat(entry.voltage) : undefined,
-                        resistance: entry.resistance ? parseFloat(entry.resistance) : undefined,
-                        capacity: entry.capacity ? parseFloat(entry.capacity) : undefined,
+                        voltage: entry.voltage !== undefined && entry.voltage !== '' && !isNaN(parseFloat(entry.voltage)) ? parseFloat(entry.voltage) : undefined,
+                        resistance: entry.resistance !== undefined && entry.resistance !== '' && !isNaN(parseFloat(entry.resistance)) ? parseFloat(entry.resistance) : undefined,
+                        capacity: entry.capacity !== undefined && entry.capacity !== '' && !isNaN(parseFloat(entry.capacity)) ? parseFloat(entry.capacity) : undefined,
                         grade: entry.grade || undefined,
                         location: entry.location || undefined,
                         timestamp: Date.now(),
@@ -418,18 +436,18 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
         if (editingGood) {
             // DATA SAFETY #2: Check for removed serials BEFORE any state changes
-            // Cancel aborts the entire save — no changes made at all
+            // Cancel aborts the entire save â€” no changes made at all
             const removedSerials = isCell ? editingGood.serials.filter(s => !validSerials.includes(s)) : [];
             let shouldDeleteOrphans = false;
             if (removedSerials.length > 0) {
                 const orphanedResults = testResults.filter(r => r.receivedGoodId === goodId && removedSerials.includes(r.serialNumber));
                 if (orphanedResults.length > 0) {
                     const confirmRemove = window.confirm(
-                        `⚠️ You removed ${removedSerials.length} serial(s) from this batch.\n\n` +
+                        `âš ï¸ You removed ${removedSerials.length} serial(s) from this batch.\n\n` +
                         `${orphanedResults.length} test result(s) with grading data exist for these serials.\n` +
                         `Click OK to proceed and delete orphaned test data, or Cancel to abort save.`
                     );
-                    if (!confirmRemove) return; // Cancel → abort the entire save, NO changes made
+                    if (!confirmRemove) return; // Cancel â†’ abort the entire save, NO changes made
                     shouldDeleteOrphans = true;
                 }
             }
@@ -474,7 +492,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     updated = updated.filter(r => !(r.receivedGoodId === goodId && orphanSet.has(r.serialNumber)));
                 }
 
-                // Standard merge path — preserve existing fields not in the grid
+                // Standard merge path â€” preserve existing fields not in the grid
                 newTestResults.forEach(newResult => {
                     const idx = updated.findIndex(r => r.id === newResult.id);
                     if (idx > -1) {
@@ -492,14 +510,6 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             setTestResults(prev => [...prev, ...newTestResults]);
             addLogEntry('Added Raw Material', `Registered ${newGood.quantity} of ${newGood.name}`);
         }
-
-        try {
-            const map = JSON.parse(localStorage.getItem('bluamp_ignored_items') || '{}');
-            if (newGood.ignoreReplenishment) map[newGood.id] = true;
-            else delete map[newGood.id];
-            localStorage.setItem('bluamp_ignored_items', JSON.stringify(map));
-        } catch (e) {}
-
         setIsModalOpen(false);
     };
 
@@ -510,7 +520,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             const testedCount = affectedResults.filter(r => r.voltage || r.resistance || r.capacity || r.grade).length;
 
             const message = testedCount > 0
-                ? `Delete "${editingGood.name}"?\n\n⚠️ This will permanently destroy ${affectedResults.length} test result(s), including ${testedCount} with grading/test data.\n\nThis action cannot be undone.`
+                ? `Delete "${editingGood.name}"?\n\nâš ï¸ This will permanently destroy ${affectedResults.length} test result(s), including ${testedCount} with grading/test data.\n\nThis action cannot be undone.`
                 : `Delete "${editingGood.name}"?`;
 
             if (confirm(message)) {
@@ -524,11 +534,12 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
     // CSV EXPORT: Export all inventory data with test results
     const handleExportCsv = () => {
-        const headers = ['Name', 'Category', 'Make/Model', 'Supplier', 'Invoice #', 'Quantity', 'Status', 'Date', 'Serial Number', '#', 'Voltage', 'Resistance (mΩ)', 'Capacity (Ah)', 'Grade', 'Location', 'Notes'];
+        const headers = ['Name', 'Category', 'Make/Model', 'Supplier', 'Invoice #', 'Quantity', 'UOM', 'Status', 'Date', 'Serial Number', '#', 'Voltage', 'Resistance (mÎ©)', 'Capacity (Ah)', 'Grade', 'Location', 'Notes'];
         const rows: string[][] = [];
 
         receivedGoods.forEach(good => {
             const isTracked = isTrackedCategory(good.category);
+            const uomStr = good.uom || 'qty';
             if (isTracked && good.serials.length > 0) {
                 good.serials.forEach((serial, idx) => {
                     const tr = testResults.find(r => r.receivedGoodId === good.id && r.serialNumber === serial);
@@ -540,6 +551,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                         `"${good.supplier || ''}"`,
                         `"${good.invoiceNumber || ''}"`,
                         String(good.quantity),
+                        `"${uomStr}"`,
                         `"${good.status}"`,
                         new Date(good.timestamp).toLocaleDateString(),
                         `"${serial}"`,
@@ -559,6 +571,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     `"${good.supplier || ''}"`,
                     `"${good.invoiceNumber || ''}"`,
                     String(good.quantity),
+                    `"${uomStr}"`,
                     `"${good.status}"`,
                     new Date(good.timestamp).toLocaleDateString(),
                     '', '', '', '', '', '', '', ''
@@ -577,35 +590,244 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
         document.body.removeChild(link);
     };
 
+    // CSV TEMPLATE DOWNLOADER FOR INVENTORY
+    const downloadInventoryCSVTemplate = () => {
+        const csvContent = [
+            'Item Name,Category,Make/Model,Supplier,Quantity,UOM,Damaged Count,Invoice Number,Serials,Low Stock Threshold %,Notes',
+            'LFP 3.2V 100Ah Cell,Cell,EVE LF100,Sunergy Tech,100,qty,0,INV-9901,"SN1001, SN1002, SN1003",20,Batch A grade cells',
+            'Smart BMS 24S 200A,BMS,JK-B2A24S20P,JK Power,50,qty,0,INV-9902,"BMS-01, BMS-02",20,Factory verified',
+            '5kW Solar Inverter,Inverter,Deye 5K,Deye Solar,10,qty,0,INV-9903,"INV-501",15,Heavy duty inverter'
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `inventory_import_template.csv`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // CSV PARSER & IMPORT HANDLERS FOR INVENTORY
+    const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    };
+
+    const handleCSVFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (text) {
+                parseAndImportInventoryCSV(text);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
+    const parseAndImportInventoryCSV = (csvText: string) => {
+        const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+        if (lines.length < 2) {
+            alert('CSV file must contain a header row and at least one data row.');
+            return;
+        }
+
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/[^a-z0-9% ]/g, ''));
+        
+        const getColIdx = (possibleNames: string[]) => {
+            return headers.findIndex(h => possibleNames.some(p => h.includes(p.toLowerCase())));
+        };
+
+        const idxName = getColIdx(['item name', 'name', 'product name', 'material']);
+        const idxCategory = getColIdx(['category', 'cat', 'type']);
+        const idxMakeModel = getColIdx(['make/model', 'make', 'model']);
+        const idxSupplier = getColIdx(['supplier', 'vendor']);
+        const idxQty = getColIdx(['quantity', 'qty', 'stock']);
+        const idxUom = getColIdx(['uom', 'unit']);
+        const idxDamaged = getColIdx(['damaged count', 'damaged']);
+        const idxInvoice = getColIdx(['invoice number', 'invoice', 'invoice #']);
+        const idxSerials = getColIdx(['serials', 'serial numbers', 'serial']);
+        const idxThreshold = getColIdx(['low stock threshold', 'threshold', 'alert limit', '%']);
+        const idxNotes = getColIdx(['notes', 'comments']);
+
+        if (idxName === -1) {
+            alert('Could not find required "Item Name" column header in CSV file.');
+            return;
+        }
+
+        let initialMap: Record<string, number> = {};
+        try {
+            initialMap = JSON.parse(localStorage.getItem('dc_initial_quantity_map') || '{}');
+        } catch (e) {}
+
+        const newGoods: ReceivedGood[] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const cols = parseCSVLine(line);
+            const itemName = cols[idxName] || '';
+            if (!itemName) continue;
+
+            const category = idxCategory !== -1 && cols[idxCategory] ? cols[idxCategory] : 'Other';
+            const makeModel = idxMakeModel !== -1 ? cols[idxMakeModel] : '';
+            const supplier = idxSupplier !== -1 ? cols[idxSupplier] : '';
+            const quantity = idxQty !== -1 ? Math.max(0, parseFloat(cols[idxQty]) || 0) : 0;
+            const uom = idxUom !== -1 && cols[idxUom] ? cols[idxUom].toLowerCase() : 'qty';
+            const damagedCount = idxDamaged !== -1 ? Math.max(0, parseInt(cols[idxDamaged]) || 0) : 0;
+            const invoiceNumber = idxInvoice !== -1 ? cols[idxInvoice] : '';
+            
+            let serials: string[] = [];
+            if (idxSerials !== -1 && cols[idxSerials]) {
+                serials = cols[idxSerials]
+                    .split(/[,;\n]/)
+                    .map(s => s.trim().replace(/^["']|["']$/g, ''))
+                    .filter(s => s.length > 0);
+            }
+
+            const lowStockThresholdPercent = idxThreshold !== -1 ? Math.min(100, Math.max(0, parseFloat(cols[idxThreshold]) || 20)) : 20;
+            const notes = idxNotes !== -1 ? cols[idxNotes] : 'Imported via CSV';
+
+            const id = crypto.randomUUID();
+            
+            const serialIndexMap: Record<string, number> = {};
+            serials.forEach((s, index) => {
+                serialIndexMap[s] = index + 1;
+            });
+
+            initialMap[id] = quantity;
+
+            const newGood: ReceivedGood = {
+                id,
+                name: itemName,
+                category,
+                makeModel,
+                supplier,
+                quantity,
+                initialQuantity: quantity,
+                uom,
+                lowStockThresholdPercent,
+                status: ReceivedGoodStatus.ND,
+                damagedCount,
+                invoiceNumber,
+                serials,
+                serialIndexMap,
+                timestamp: Date.now(),
+                notes
+            };
+
+            newGoods.push(newGood);
+        }
+
+        if (newGoods.length === 0) {
+            alert('No valid inventory item rows were found in the uploaded CSV.');
+            return;
+        }
+
+        try {
+            localStorage.setItem('dc_initial_quantity_map', JSON.stringify(initialMap));
+        } catch (e) {}
+
+        setReceivedGoods(prev => [...newGoods, ...prev]);
+        addLogEntry('Imported Inventory CSV', `Imported ${newGoods.length} raw material items into Inventory Stock.`);
+        alert(`Successfully imported ${newGoods.length} inventory items!`);
+    };
+
     return (
         <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
                 <div>
                     <h1 className="text-3xl font-black text-[#0D0D0D] tracking-tight">Inventory Stock</h1>
                     <p className="text-sm text-[#404040] mt-1 font-medium">Manage raw materials and tracked components.</p>
                 </div>
                 <div className="flex items-center space-x-3">
-                    <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-6 py-2.5 rounded-xl shadow-lg hover:bg-blue-700 transition-all transform active:scale-95 font-bold uppercase tracking-widest text-xs">
+                    <button onClick={handleCreateNew} className="flex items-center bg-[#205f64] text-[#0D0D0D] px-6 py-2.5 rounded-xl shadow-lg hover:bg-[#498e72] hover:text-white transition-all transform active:scale-95 font-bold uppercase tracking-widest text-xs">
                         <PlusIcon /> <span className="ml-2">Register Item</span>
                     </button>
-                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center bg-white border-2 border-blue-200 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-50 transition-colors text-xs font-bold uppercase tracking-widest">
-                        <ImportIcon className="mr-2" size={14} /> Import
+                    <input type="file" ref={fileInputRef} onChange={handleCSVFileChange} className="hidden" accept=".csv,text/csv" />
+                </div>
+            </div>
+
+            {/* UNIFORM CSV CONTROL BAR */}
+            <div className="mb-6 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
+                <div className="flex items-start gap-3">
+                    <span className="text-xl">ðŸ“„</span>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
+                        </div>
+                        <p className="text-[11px] font-mono text-slate-300 mt-1 leading-relaxed flex flex-wrap gap-1.5 items-center">
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Item Name</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Category</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Make/Model</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Supplier</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Quantity</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">UOM</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Damaged Count</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Invoice Number</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Serials</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Low Stock Threshold %</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Notes</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 self-end md:self-auto shrink-0">
+                    <button
+                        onClick={handleExportCsv}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                        title="Export current inventory list as CSV"
+                    >
+                        <Download size={14} />
+                        <span>Export CSV</span>
                     </button>
-                    <button onClick={handleExportCsv} className="flex items-center bg-white border-2 border-slate-300 text-slate-600 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold uppercase tracking-widest">
-                        <Download size={14} className="mr-2" /> Export CSV
+
+                    <button
+                        onClick={downloadInventoryCSVTemplate}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                        title="Download sample CSV template with proper headers"
+                    >
+                        <span>ðŸ’¾ Download Template CSV</span>
                     </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" />
+
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5"
+                        title="Import inventory stock from CSV file"
+                    >
+                        <span>ðŸ“¥ Import CSV</span>
+                    </button>
                 </div>
             </div>
 
             <div className="mb-4 relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#205f64] transition-colors">
                     <SearchIcon className="h-5 w-5" />
                 </div>
                 <input
                     type="text"
                     placeholder="Filter by name, make, supplier or invoice..."
-                    className="block w-full p-4 pl-12 border-2 border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-[#404040]"
+                    className="block w-full p-4 pl-12 border-2 border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:border-[#205f64] focus:ring-4 focus:ring-[#205f64]/10 transition-all text-[#404040]"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                 />
@@ -623,7 +845,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     <button
                         key={cat}
                         onClick={() => setSelectedCategory(cat)}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all ${selectedCategory === cat ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all ${selectedCategory === cat ? 'bg-[#205f64] text-[#0D0D0D] border-[#205f64] shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                     >
                         {cat}
                     </button>
@@ -633,19 +855,19 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     onClick={() => setFilterNotes(!filterNotes)}
                     className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterNotes ? 'bg-amber-400 text-amber-900 border-amber-400 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    📝 Has Notes
+                    ðŸ“ Has Notes
                 </button>
                 <button
                     onClick={() => setFilterLowStock(!filterLowStock)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterLowStock ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterLowStock ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-black' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    ⚠️ Low Stock Alerts
+                    âš ï¸ Low Stock Alerts
                 </button>
                 <button
                     onClick={() => setFilterIgnored(!filterIgnored)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterIgnored ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterIgnored ? 'bg-slate-800 text-amber-300 border-slate-800 shadow-sm font-black' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    🔕 Ignored Items
+                    ðŸ”• Ignored Items
                 </button>
             </div>
 
@@ -657,37 +879,37 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
                     return (
                         <div key={good.id} className={`relative bg-white rounded-2xl shadow-sm hover:shadow-xl p-6 flex flex-col border transition-all duration-300 ${
-                            stockAlert.isLowStock ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'
+                            stockAlert.isOutOfStock 
+                                ? 'border-rose-300 bg-rose-50/10' 
+                                : stockAlert.isLowStock 
+                                    ? 'border-amber-300 bg-amber-50/10' 
+                                    : 'border-slate-200'
                         }`}>
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex flex-col gap-1">
-                                    <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md w-fit ${getStatusInfo(good?.status).color}`}>
-                                        {getStatusInfo(good?.status).text}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${statusInfo[good.status].color}`}>
+                                            {statusInfo[good.status].text}
+                                        </div>
+                                        <div className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                            Unit: {good.uom || 'qty'}
+                                        </div>
                                     </div>
-                                    {good.ignoreReplenishment ? (
-                                        <div className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border w-fit bg-slate-100 text-slate-600 border-slate-200">
-                                            🔕 DO NOT REPLENISH
+                                    {good.isIgnoredForAlerts ? (
+                                        <div className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border border-slate-300 bg-slate-100 text-slate-600 w-fit">
+                                            ðŸš« DO NOT REPLENISH
                                         </div>
                                     ) : stockAlert.isLowStock && (
                                         <div className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border w-fit ${
-                                            stockAlert.isOutOfStock ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                                            stockAlert.isOutOfStock 
+                                                ? 'bg-rose-100 text-rose-800 border-rose-200' 
+                                                : 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                         }`}>
-                                            {stockAlert.isOutOfStock ? '🚫 OUT OF STOCK' : `⚠️ LOW STOCK (${stockAlert.thresholdPercent}%)`}
+                                            {stockAlert.isOutOfStock ? 'ðŸš« OUT OF STOCK' : `âš ï¸ LOW STOCK (${stockAlert.thresholdPercent}%)`}
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-1.5">
-                                    <button
-                                        onClick={(e) => handleToggleIgnoreReplenishment(good, e)}
-                                        className={`p-1 rounded-md transition-all text-xs border ${
-                                            good.ignoreReplenishment
-                                                ? 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                                                : 'text-slate-300 border-transparent hover:text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                        title={good.ignoreReplenishment ? 'Click to re-enable stock alerts' : 'Click to ignore low stock alerts (do not replenish)'}
-                                    >
-                                        {good.ignoreReplenishment ? '🔕' : '🔔'}
-                                    </button>
+                                <div className="flex items-center gap-2">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === good.id ? null : good.id); }}
                                         className={`relative p-1 rounded-md transition-all text-sm ${(good.notes && good.notes !== 'actual physical qty = ')
@@ -696,7 +918,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                             }`}
                                         title="Open note"
                                     >
-                                        📝
+                                        ðŸ“
                                         {good.notes && good.notes !== 'actual physical qty = ' && (
                                             <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full"></span>
                                         )}
@@ -710,8 +932,8 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                 <div className="absolute top-12 right-4 z-50 w-64 animate-in" style={{ animation: 'fadeIn 0.15s ease-out' }}>
                                     <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
-                                            <button onClick={() => setOpenNoteId(null)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
+                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ðŸ“Œ Note</span>
+                                            <button onClick={() => setOpenNoteId(null)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">âœ•</button>
                                         </div>
                                         <textarea
                                             className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
@@ -729,8 +951,13 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                             )}
 
                             <div className="flex-1">
-                                <h3 className="font-bold text-xl text-[#0D0D0D] leading-tight mb-1">{good.name}</h3>
-                                <p className="text-xs text-blue-600 font-black uppercase tracking-widest">{good.makeModel}</p>
+                                <h3 className="font-bold text-xl text-[#0D0D0D] leading-tight mb-1 flex items-center justify-between">
+                                    <span>{good.name}</span>
+                                    <span className="text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200 font-mono">
+                                        {good.uom || 'qty'}
+                                    </span>
+                                </h3>
+                                <p className="text-xs text-[#498e72] font-black uppercase tracking-widest">{good.makeModel}</p>
                                 <div className="mt-4 flex justify-between items-end border-t border-slate-50 pt-4">
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Supplier</p>
@@ -738,7 +965,9 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Available</p>
-                                        <p className={`text-2xl font-black ${good.quantity === 0 ? 'text-red-500' : 'text-blue-600'}`}>{good.quantity}</p>
+                                        <p className={`text-2xl font-black ${good.quantity === 0 ? 'text-red-500' : 'text-[#205f64]'}`}>
+                                            {good.quantity} <span className="text-xs font-bold text-slate-600 uppercase font-mono">{good.uom || 'qty'}</span>
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -747,11 +976,11 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                 <div>
                                     <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                                         <span>{isTracked ? 'Tracked Serials' : 'Stock Level'}</span>
-                                        <span className="text-blue-600">{isTracked ? `${good.serials.length} / ${good.quantity}` : `${good.quantity} units`}</span>
+                                        <span className="text-[#498e72]">{isTracked ? `${good.serials.length} / ${good.quantity} ${good.uom || 'qty'}` : `${good.quantity} ${good.uom || 'qty'}`}</span>
                                     </div>
                                     {isTracked && (
                                         <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
-                                            <div className={`h-full transition-all duration-500 rounded-full ${progress === 100 ? 'bg-blue-600' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
+                                            <div className={`h-full transition-all duration-500 rounded-full ${progress === 100 ? 'bg-[#205f64]' : 'bg-[#498e72]'}`} style={{ width: `${progress}%` }}></div>
                                         </div>
                                     )}
                                     {!isTracked && (
@@ -760,8 +989,19 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex gap-2 justify-end">
-                                    <button onClick={() => handleEditClick(good)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><PencilIcon /></button>
+                                <div className="flex gap-2 justify-end items-center">
+                                    <button 
+                                        onClick={() => handleToggleIgnoreReplenish(good)} 
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                                            good.isIgnoredForAlerts
+                                                ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                        }`}
+                                        title={good.isIgnoredForAlerts ? "Click to re-enable low stock alerts" : "Click to ignore / mark as do not replenish"}
+                                    >
+                                        {good.isIgnoredForAlerts ? 'ðŸš« Ignored' : 'ðŸ”” Alert On'}
+                                    </button>
+                                    <button onClick={() => handleEditClick(good)} className="p-2.5 text-slate-400 hover:text-[#205f64] hover:bg-[#205f64]/5 rounded-xl transition-all"><PencilIcon /></button>
                                 </div>
                             </div>
                         </div>
@@ -774,7 +1014,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Item Name</label>
-                            <input type="text" list="item-names" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-sm" required placeholder="e.g. 32700 6000mAh Cell" />
+                            <input type="text" list="item-names" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none font-semibold text-sm" required placeholder="e.g. 32700 6000mAh Cell" />
                             <datalist id="item-names">
                                 {Array.from(new Set(receivedGoods.map(g => g.name))).map(n => <option key={n} value={n} />)}
                             </datalist>
@@ -782,7 +1022,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
                         <div>
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Category</label>
-                            <input type="text" list="categories" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm" required />
+                            <input type="text" list="categories" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm" required />
                             <datalist id="categories">
                                 {CATEGORIES.map(c => <option key={c} value={c} />)}
                             </datalist>
@@ -790,7 +1030,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
                         <div>
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Make / Model</label>
-                            <input type="text" value={formData.makeModel} onChange={e => setFormData({ ...formData, makeModel: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="e.g. EVE" />
+                            <input type="text" value={formData.makeModel} onChange={e => setFormData({ ...formData, makeModel: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm" placeholder="e.g. EVE" />
                         </div>
 
                         <div>
@@ -798,78 +1038,44 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                             <select 
                                 value={formData.supplier} 
                                 onChange={e => handleSupplierChange(e.target.value)} 
-                                className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                                className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm bg-white"
                             >
                                 <option value="">Select Supplier</option>
                                 {companyProfiles.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                <option value="ADD_NEW" className="font-bold text-blue-600">+ Add New...</option>
+                                <option value="ADD_NEW" className="font-bold text-[#498e72]">+ Add New...</option>
                             </select>
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Invoice Number</label>
-                            <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({ ...formData, invoiceNumber: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                            <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({ ...formData, invoiceNumber: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm" />
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Quantity</label>
-                            <input type="number" min="0" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: parseInt(e.target.value) })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" required />
+                            <input type="number" min="0" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: parseInt(e.target.value) })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm font-bold" required />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Unit of Measurement (UOM)</label>
+                            <select 
+                                value={formData.uom || 'qty'} 
+                                onChange={e => setFormData({ ...formData, uom: e.target.value })} 
+                                className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm bg-white font-bold text-slate-800"
+                            >
+                                <option value="qty">qty (Quantity / Pcs)</option>
+                                <option value="grams">grams (g)</option>
+                                <option value="cm">cm (Centimeters)</option>
+                            </select>
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-[#404040] uppercase tracking-wider mb-2">Status</label>
-                            <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
+                            <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm bg-white">
                                 {Object.entries(statusInfo).map(([key, info]) => (
                                     <option key={key} value={key}>{info.text}</option>
                                 ))}
                             </select>
-                        </div>
-
-                        <div className="col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                            <div className="flex justify-between items-center">
-                                <label className="block text-xs font-bold text-[#205f64] uppercase tracking-wider font-brand">
-                                    Low Stock Alert Safety Threshold (0% - 100%)
-                                </label>
-                                <span className="text-xs font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                    {formData.lowStockThresholdPercent ?? 20}% of entry
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <input 
-                                    type="range" 
-                                    min="0" 
-                                    max="100" 
-                                    value={formData.lowStockThresholdPercent ?? 20} 
-                                    onChange={e => setFormData({ ...formData, lowStockThresholdPercent: parseInt(e.target.value) || 0 })} 
-                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#205f64]"
-                                />
-                                <div className="flex items-center gap-1">
-                                    <input 
-                                        type="number" 
-                                        min="0" 
-                                        max="100" 
-                                        value={formData.lowStockThresholdPercent ?? 20} 
-                                        onChange={e => setFormData({ ...formData, lowStockThresholdPercent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) })} 
-                                        className="w-16 border border-slate-300 rounded-lg p-1.5 text-center text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                    />
-                                    <span className="text-xs font-bold text-slate-600">%</span>
-                                </div>
-                            </div>
-                            <p className="text-[11px] text-slate-500 font-medium">
-                                Triggers alert on Home Dashboard when stock drops below <strong>{Math.round(((formData.initialQuantity || formData.quantity || 0) * (formData.lowStockThresholdPercent ?? 20)) / 100)}</strong> units ({formData.lowStockThresholdPercent ?? 20}% of original entry quantity).
-                            </p>
-                            <div className="flex items-center gap-2 pt-2.5 border-t border-slate-200 mt-2">
-                                <input 
-                                    type="checkbox" 
-                                    id="ignoreReplenishment" 
-                                    checked={Boolean(formData.ignoreReplenishment)} 
-                                    onChange={e => setFormData({ ...formData, ignoreReplenishment: e.target.checked })} 
-                                    className="w-4 h-4 text-[#205f64] rounded border-slate-300 focus:ring-[#205f64] cursor-pointer" 
-                                />
-                                <label htmlFor="ignoreReplenishment" className="text-xs font-bold text-slate-700 cursor-pointer select-none flex items-center gap-1">
-                                    🔕 Ignore Replenishment <span className="font-normal text-slate-500 text-[11px]">(Exclude from Home Dashboard & Low Stock Alerts)</span>
-                                </label>
-                            </div>
                         </div>
                     </div>
 
@@ -879,10 +1085,66 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                         <textarea
                             value={formData.notes ?? 'actual physical qty = '}
                             onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+                            className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-[#205f64] outline-none text-sm resize-none"
                             rows={2}
                             placeholder="actual physical qty = "
                         />
+                    </div>
+
+                    {/* Low Stock Alert Safety Threshold */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 mt-4">
+                        <div className="flex justify-between items-center">
+                            <label className="block text-xs font-bold text-[#205f64] uppercase tracking-wider font-brand">
+                                Low Stock Alert Safety Threshold (0% - 100%)
+                            </label>
+                            <span className="text-xs font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                {formData.lowStockThresholdPercent ?? 20}% of entry
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                value={formData.lowStockThresholdPercent ?? 20} 
+                                onChange={e => setFormData({ ...formData, lowStockThresholdPercent: parseInt(e.target.value) || 0 })} 
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#205f64]"
+                            />
+                            <div className="flex items-center gap-1">
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    max="100" 
+                                    value={formData.lowStockThresholdPercent ?? 20} 
+                                    onChange={e => setFormData({ ...formData, lowStockThresholdPercent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) })} 
+                                    className="w-16 border border-slate-300 rounded-lg p-1.5 text-center text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                />
+                                <span className="text-xs font-bold text-slate-600">%</span>
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                            Triggers alert on Home Dashboard when stock drops below <strong>{Math.round(((formData.initialQuantity || formData.quantity || 0) * (formData.lowStockThresholdPercent ?? 20)) / 100)}</strong> units ({formData.lowStockThresholdPercent ?? 20}% of original entry quantity).
+                        </p>
+
+                        {/* Ignore / Do Not Replenish Toggle */}
+                        <div className="pt-2.5 border-t border-slate-200 mt-2 flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(formData.isIgnoredForAlerts)}
+                                    onChange={e => setFormData({ ...formData, isIgnoredForAlerts: e.target.checked })}
+                                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                                />
+                                <span className="text-xs font-bold text-slate-800">
+                                    ðŸš« Do Not Replenish / Disable Stock Alerts
+                                </span>
+                            </label>
+                            {formData.isIgnoredForAlerts && (
+                                <span className="text-[10px] font-black uppercase text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                                    Alerts Silenced
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Serial Number & Test Data Management - ONLY FOR CELLS */}
@@ -892,7 +1154,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                 <h3 className="text-sm font-bold text-slate-700 uppercase">Serials & Test Data</h3>
                                 <div className="text-right">
                                     <span className="text-xs text-slate-500 block">{serialEntries.filter(s => s.serial).length} / {formData.quantity} Assigned</span>
-                                    <span className="text-[9px] text-blue-600">Paste into any cell. Grid auto-expands.</span>
+                                    <span className="text-[9px] text-[#498e72]">Paste into any cell. Grid auto-expands.</span>
                                 </div>
                             </div>
 
@@ -917,7 +1179,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                             <th className="p-2 border-b w-8">#</th>
                                             <th className="p-2 border-b">Serial Number</th>
                                             <th className="p-2 border-b w-24">Voltage (V)</th>
-                                            <th className="p-2 border-b w-24">Res (mΩ)</th>
+                                            <th className="p-2 border-b w-24">Res (mÎ©)</th>
                                             <th className="p-2 border-b w-24">Cap (Ah)</th>
                                         </tr>
                                     </thead>
@@ -928,7 +1190,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                                 <td className="p-1">
                                                     <input
                                                         type="text"
-                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded outline-none bg-transparent font-mono"
+                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-[#205f64] focus:bg-white rounded outline-none bg-transparent font-mono"
                                                         value={entry.serial}
                                                         onChange={(e) => handleEntryChange(idx, 'serial', e.target.value)}
                                                         onPaste={(e) => handleGridPaste(e, idx, 'serial')}
@@ -938,7 +1200,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                                 <td className="p-1">
                                                     <input
                                                         type="text"
-                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded outline-none bg-transparent"
+                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-[#205f64] focus:bg-white rounded outline-none bg-transparent"
                                                         value={entry.voltage}
                                                         onChange={(e) => handleEntryChange(idx, 'voltage', e.target.value)}
                                                         onPaste={(e) => handleGridPaste(e, idx, 'voltage')}
@@ -947,7 +1209,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                                 <td className="p-1">
                                                     <input
                                                         type="text"
-                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded outline-none bg-transparent"
+                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-[#205f64] focus:bg-white rounded outline-none bg-transparent"
                                                         value={entry.resistance}
                                                         onChange={(e) => handleEntryChange(idx, 'resistance', e.target.value)}
                                                         onPaste={(e) => handleGridPaste(e, idx, 'resistance')}
@@ -956,7 +1218,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                                 <td className="p-1">
                                                     <input
                                                         type="text"
-                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-blue-500 focus:bg-white rounded outline-none bg-transparent"
+                                                        className="w-full p-1 border border-transparent hover:border-slate-200 focus:border-[#205f64] focus:bg-white rounded outline-none bg-transparent"
                                                         value={entry.capacity}
                                                         onChange={(e) => handleEntryChange(idx, 'capacity', e.target.value)}
                                                         onPaste={(e) => handleGridPaste(e, idx, 'capacity')}
@@ -991,7 +1253,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                             </button>
                         ) : <div></div>}
 
-                        <button type="submit" className="bg-blue-600 text-white px-8 py-2.5 rounded-lg hover:bg-blue-700 transition-all font-black uppercase tracking-widest text-xs shadow-lg active:scale-95">
+                        <button type="submit" className="bg-[#205f64] text-[#0D0D0D] px-8 py-2.5 rounded-lg hover:bg-[#498e72] hover:text-white transition-all font-black uppercase tracking-widest text-xs shadow-lg active:scale-95">
                             {editingGood ? 'Update Record' : 'Save Record'}
                         </button>
                     </div>
@@ -999,16 +1261,28 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             </Modal>
             {/* Add Company Modal with Iframe */}
             {isAddCompanyModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 text-left">
-                        <div className="flex justify-between items-center p-4 border-b">
-                            <h2 className="text-lg font-bold text-slate-800">Add New Company Profile</h2>
-                            <button onClick={() => setIsAddCompanyModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2">✕</button>
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setIsAddCompanyModalOpen(false)}
+                >
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] max-h-[600px] flex flex-col overflow-hidden border border-slate-200 text-left"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center px-4 py-3 border-b bg-slate-50 shrink-0">
+                            <h2 className="text-base sm:text-lg font-bold text-slate-800">Add New Company Profile</h2>
+                            <button 
+                                onClick={() => setIsAddCompanyModalOpen(false)} 
+                                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-lg font-bold"
+                                title="Close"
+                            >
+                                âœ•
+                            </button>
                         </div>
-                        <div className="flex-1 min-h-[600px] h-[75vh]">
+                        <div className="flex-1 w-full h-full min-h-0 bg-white">
                             <iframe 
                                 src="/?mode=add_company" 
-                                className="w-full h-full border-none"
+                                className="w-full h-full border-none block"
                                 title="Add Company"
                             />
                         </div>
@@ -1020,3 +1294,4 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 };
 
 export default ReceivedGoods;
+

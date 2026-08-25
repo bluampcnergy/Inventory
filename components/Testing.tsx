@@ -1,6 +1,7 @@
-
+﻿
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { ReceivedGood, TestResult, User } from '../types';
+import { supabase } from '../supabaseClient';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { PencilIcon } from './icons/PencilIcon';
@@ -38,6 +39,7 @@ const toRoman = (num: number): string => {
 
 const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestResults, addLogEntry, currentUser, setReceivedGoods, onSendToProduction }) => {
     const [selectedBatch, setSelectedBatch] = useState<ReceivedGood | null>(null);
+    const [isLoadingBatchData, setIsLoadingBatchData] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [serialSearchTerm, setSerialSearchTerm] = useState('');
 
@@ -67,19 +69,18 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
     // Filter eligible goods sorted by date desc
     const eligibleGoods = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        return (receivedGoods || []).filter(good => {
-            if (!good) return false;
+        return receivedGoods.filter(good => {
             const cat = (good.category || '').trim().toLowerCase();
             const isTargetCategory = cat.includes('cell') || cat.includes('bms');
             const hasSerials = Array.isArray(good.serials) && good.serials.length > 0;
             return isTargetCategory && hasSerials;
         }).filter(good =>
-            (good.name || '').toLowerCase().includes(term) ||
+            good.name.toLowerCase().includes(term) ||
             (good.category || '').toLowerCase().includes(term) ||
             (good.makeModel || '').toLowerCase().includes(term) ||
             (good.supplier || '').toLowerCase().includes(term) ||
-            (good.serials || []).some(s => (s || '').toLowerCase().includes(term))
-        ).sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
+            (good.serials || []).some(s => s.toLowerCase().includes(term))
+        ).sort((a, b) => b.timestamp - a.timestamp);
     }, [receivedGoods, searchTerm]);
 
     // Update Legend when config changes
@@ -117,7 +118,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 
     }, [gradingConfig]);
 
-    const handleOpenBatch = (good: ReceivedGood) => {
+    const handleOpenBatch = async (good: ReceivedGood) => {
         setSelectedBatch(good);
         setSerialSearchTerm('');
         setSortConfig({ key: 'index', direction: 'asc' });
@@ -125,6 +126,26 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
         setBatchLocation('');
         setShowGrading(true); // Default open
         setSelectedSerials(new Set()); // Reset selection
+        setIsLoadingBatchData(true);
+
+        // Fetch full testing data specifically for this batch from database
+        try {
+            const { data, error } = await supabase
+                .from('test_results')
+                .select('*')
+                .eq('receivedGoodId', good.id);
+
+            if (!error && data) {
+                setTestResults(prev => {
+                    const otherBatches = prev.filter(r => r.receivedGoodId !== good.id);
+                    return [...otherBatches, ...data];
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch complete test results for batch:', err);
+        } finally {
+            setIsLoadingBatchData(false);
+        }
 
         // Check if grading config already exists on the batch
         const savedConfig = good.gradingConfig || (good as any).gradingconfig;
@@ -186,6 +207,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
     const handleInputChange = (serial: string, changes: Partial<TestResult>) => {
         if (!selectedBatch) return;
 
+        let itemToSave: TestResult | null = null;
         setTestResults(prev => {
             const updated = [...prev];
             const existingIdx = updated.findIndex(r => r.receivedGoodId === selectedBatch.id && r.serialNumber === serial);
@@ -193,17 +215,18 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
             const category = batchCat.includes('cell') ? 'Cell' : 'BMS';
 
             if (existingIdx > -1) {
-                updated[existingIdx] = {
+                itemToSave = {
                     ...updated[existingIdx],
                     ...changes,
                     timestamp: Date.now(),
                     testedBy: currentUser?.username || 'user'
                 };
+                updated[existingIdx] = itemToSave;
             } else {
                 // Safe Serial ID generation
                 const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
 
-                updated.push({
+                itemToSave = {
                     id: `test-${selectedBatch.id}-${safeSerial}`,
                     receivedGoodId: selectedBatch.id,
                     serialNumber: serial,
@@ -211,10 +234,26 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                     timestamp: Date.now(),
                     testedBy: currentUser?.username || 'user',
                     ...changes
-                });
+                };
+                updated.push(itemToSave);
             }
             return updated;
         });
+
+        if (itemToSave) {
+            const targetItem = itemToSave as TestResult;
+            const dbPayload = {
+                ...targetItem,
+                voltage: targetItem.voltage !== undefined && !isNaN(targetItem.voltage) ? targetItem.voltage : null,
+                resistance: targetItem.resistance !== undefined && !isNaN(targetItem.resistance) ? targetItem.resistance : null,
+                capacity: targetItem.capacity !== undefined && !isNaN(targetItem.capacity) ? targetItem.capacity : null,
+                grade: targetItem.grade || null,
+                location: targetItem.location || null,
+            };
+            supabase.from('test_results').upsert([dbPayload]).then(({ error }) => {
+                if (error) console.error('Error persisting test result change to Supabase:', error);
+            });
+        }
     };
 
     // Helper to get result
@@ -337,6 +376,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
         const category = batchCat.includes('cell') ? 'Cell' : 'BMS';
 
         // 1. Update Test Results with Grades AND Location
+        const itemsToSave: TestResult[] = [];
         setTestResults(prev => {
             const updated = [...prev];
 
@@ -363,16 +403,18 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 
                 // --- Update Logic ---
                 if (existingIdx > -1) {
-                    updated[existingIdx] = {
+                    const item: TestResult = {
                         ...updated[existingIdx],
                         grade: newGrade || updated[existingIdx].grade, // Keep existing grade if calculation skipped (e.g. no value)
                         location: batchLocation || updated[existingIdx].location, // Bulk update location
                         timestamp: Date.now()
                     };
+                    updated[existingIdx] = item;
+                    itemsToSave.push(item);
                 } else if (newGrade || batchLocation) {
                     // Create entry if we have grading data OR location data
                     const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
-                    updated.push({
+                    const item: TestResult = {
                         id: `test-${selectedBatch.id}-${safeSerial}`,
                         receivedGoodId: selectedBatch.id,
                         serialNumber: serial,
@@ -381,11 +423,19 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                         testedBy: currentUser?.username || 'user',
                         grade: newGrade,
                         location: batchLocation
-                    });
+                    };
+                    updated.push(item);
+                    itemsToSave.push(item);
                 }
             });
             return updated;
         });
+
+        if (itemsToSave.length > 0) {
+            supabase.from('test_results').upsert(itemsToSave).then(({ error }) => {
+                if (error) console.error('Error persisting grading to Supabase:', error);
+            });
+        }
 
         // Prepare config object for saving
         const newGradingConfig = {
@@ -493,10 +543,12 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
         if (lines.length < 2) return;
 
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
-        const serialIdx = headers.findIndex(h => h.includes('serial'));
-        const voltIdx = headers.findIndex(h => h.includes('voltage'));
-        const resIdx = headers.findIndex(h => h.includes('resistance'));
-        const capIdx = headers.findIndex(h => h.includes('capacity'));
+        const serialIdx = headers.findIndex(h => h.includes('serial') || h === 'sn' || h === 's/n' || h.includes('s_n'));
+        const voltIdx = headers.findIndex(h => h.includes('voltage') || h.includes('volt') || h === 'v');
+        const resIdx = headers.findIndex(h => h.includes('resistance') || h.includes('res') || h.includes('ir') || h.includes('mÎ©') || h.includes('mohm'));
+        const capIdx = headers.findIndex(h => h.includes('capacity') || h.includes('cap') || h.includes('ah'));
+        const gradeIdx = headers.findIndex(h => h.includes('grade'));
+        const locIdx = headers.findIndex(h => h.includes('location') || h.includes('rack'));
 
         if (serialIdx === -1) {
             alert('CSV must contain a "serial number" column.');
@@ -523,12 +575,14 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
             const voltage = voltIdx !== -1 ? parseFloat(values[voltIdx]) : undefined;
             const resistance = resIdx !== -1 ? parseFloat(values[resIdx]) : undefined;
             const capacity = capIdx !== -1 ? parseFloat(values[capIdx]) : undefined;
+            const grade = gradeIdx !== -1 ? values[gradeIdx] : undefined;
+            const location = locIdx !== -1 ? values[locIdx] : undefined;
 
             const safeVoltage = isNaN(voltage as number) ? undefined : voltage;
             const safeResistance = isNaN(resistance as number) ? undefined : resistance;
             const safeCapacity = isNaN(capacity as number) ? undefined : capacity;
 
-            if (safeVoltage === undefined && safeResistance === undefined && safeCapacity === undefined) return;
+            if (safeVoltage === undefined && safeResistance === undefined && safeCapacity === undefined && !grade && !location) return;
 
             const safeSerial = serial.replace(/[^a-zA-Z0-9]/g, '_');
             newResults.push({
@@ -539,6 +593,8 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 voltage: safeVoltage,
                 resistance: safeResistance,
                 capacity: safeCapacity,
+                grade: grade || undefined,
+                location: location || undefined,
                 timestamp: Date.now(),
                 testedBy: currentUser?.username || 'Bulk Import',
             });
@@ -559,6 +615,8 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                         voltage: newResult.voltage ?? updated[existingIdx].voltage,
                         resistance: newResult.resistance ?? updated[existingIdx].resistance,
                         capacity: newResult.capacity ?? updated[existingIdx].capacity,
+                        grade: newResult.grade ?? updated[existingIdx].grade,
+                        location: newResult.location ?? updated[existingIdx].location,
                         timestamp: Date.now(),
                         testedBy: newResult.testedBy
                     };
@@ -567,6 +625,15 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 }
             });
             return updated;
+        });
+
+        // Direct explicit upsert to Supabase database so data is saved immediately
+        supabase.from('test_results').upsert(newResults).then(({ error }) => {
+            if (error) {
+                console.error("Error upserting imported CSV test results to Supabase:", error);
+            } else {
+                console.log(`Successfully persisted ${newResults.length} CSV test results to Supabase DB.`);
+            }
         });
 
         addLogEntry('Imported Test Results', `Bulk imported test results for ${newResults.length} items.`);
@@ -606,40 +673,32 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
         });
     }, [selectedBatch, testResults]);
 
+    const downloadTestingCSVTemplate = () => {
+        const csvContent = "Serial Number,Voltage,Resistance,Capacity,Grade,Location\nLFP-32700-001,3.28,6.5,6000,Grade A,Rack A-1\nLFP-32700-002,3.27,6.8,5950,Grade A,Rack A-1";
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'testing_results_template.csv';
+        link.click();
+    };
+
     return (
         <div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Testing</h1>
-                    <p className="text-xs text-gray-500 mt-1">
-                        <span className="font-semibold">CSV Headers:</span> "Serial Number", "Voltage", "Resistance", "Capacity"
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Manage and verify cell/component test results.</p>
                 </div>
                 <div className="flex space-x-2">
                     {selectedSerials.size > 0 && (
                         <button
                             onClick={handleSendToProductionClick}
-                            className="flex items-center bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-lg shadow-md transition-colors animate-fade-in font-bold uppercase tracking-wide text-xs"
+                            className="flex items-center bg-[#205f64] text-[#0D0D0D] hover:text-white px-4 py-2 rounded-lg shadow-md hover:bg-[#498e72] transition-colors animate-fade-in font-bold uppercase tracking-wide text-xs"
                         >
                             <ArrowRightIcon size={16} />
                             <span className="ml-2">Send to Production ({selectedSerials.size})</span>
                         </button>
                     )}
-                    <button
-                        onClick={handleExportClick}
-                        className="flex items-center bg-white border border-blue-200 text-blue-700 px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors font-bold uppercase tracking-wide text-xs"
-                        title={selectedBatch ? `Export results for ${selectedBatch.name}` : "Export all test results"}
-                    >
-                        <Download size={16} />
-                        <span className="ml-2">Export CSV</span>
-                    </button>
-                    <button
-                        onClick={handleImportClick}
-                        className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-colors font-bold uppercase tracking-wide text-xs"
-                    >
-                        <ImportIcon />
-                        <span className="ml-2">Import Results CSV</span>
-                    </button>
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -650,13 +709,59 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 </div>
             </div>
 
+            {/* UNIFORM CSV CONTROL BAR */}
+            <div className="mb-6 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
+                <div className="flex items-start gap-3">
+                    <span className="text-xl">ðŸ“„</span>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
+                        </div>
+                        <p className="text-[11px] font-mono text-slate-300 mt-1 leading-relaxed flex flex-wrap gap-1.5 items-center">
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Serial Number</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Voltage</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Resistance</span>
+                            <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Capacity</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 self-end md:self-auto shrink-0">
+                    <button
+                        onClick={handleExportClick}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                        title={selectedBatch ? `Export results for ${selectedBatch.name}` : "Export all test results"}
+                    >
+                        <Download size={14} />
+                        <span>Export CSV</span>
+                    </button>
+
+                    <button
+                        onClick={downloadTestingCSVTemplate}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                        title="Download sample CSV template with proper headers"
+                    >
+                        <span>ðŸ’¾ Download Template CSV</span>
+                    </button>
+
+                    <button
+                        onClick={handleImportClick}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5"
+                        title="Import test results from CSV file"
+                    >
+                        <ImportIcon size={14} />
+                        <span>Import CSV</span>
+                    </button>
+                </div>
+            </div>
+
             {!selectedBatch ? (
                 <>
                     <div className="mb-6 relative">
                         <input
                             type="text"
                             placeholder="Search batches by Name, Serial #, Supplier, Make/Model..."
-                            className="block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#205f64]"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
@@ -696,11 +801,11 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                             <span>{testedCount} / {totalSerials}</span>
                                         </div>
                                         <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+                                            <div className="bg-[#205f64] h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
                                         </div>
                                     </div>
                                     <div className="mt-4 flex justify-end">
-                                        <button className="text-blue-600 text-sm font-medium hover:underline flex items-center">
+                                        <button className="text-[#498e72] text-sm font-medium hover:underline flex items-center">
                                             Test Batch <PencilIcon />
                                         </button>
                                     </div>
@@ -723,7 +828,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 sticky top-0 bg-white z-10 gap-4">
                         <div>
-                            <button onClick={() => setSelectedBatch(null)} className="text-gray-500 hover:text-gray-700 text-sm mb-1">← Back to Batches</button>
+                            <button onClick={() => setSelectedBatch(null)} className="text-gray-500 hover:text-gray-700 text-sm mb-1">â† Back to Batches</button>
                             <h2 className="text-xl font-bold text-gray-800">{selectedBatch.name} <span className="text-gray-500 font-normal">({selectedBatch.category})</span></h2>
                             <p className="text-sm text-gray-500">Batch ID: {selectedBatch.id}</p>
                         </div>
@@ -733,7 +838,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                 <input
                                     type="text"
                                     placeholder="https://drive..."
-                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 outline-none w-48 text-sm"
+                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[#205f64] outline-none w-48 text-sm"
                                     value={selectedBatch.testReportLink || ''}
                                     onChange={(e) => handleReportLinkChange(e.target.value)}
                                 />
@@ -743,7 +848,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                 <input
                                     type="text"
                                     placeholder="e.g. Rack A-1"
-                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 outline-none w-32 text-sm"
+                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[#205f64] outline-none w-32 text-sm"
                                     value={batchLocation}
                                     onChange={(e) => setBatchLocation(e.target.value)}
                                 />
@@ -757,7 +862,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                         }`}
                                     title="Open note"
                                 >
-                                    📝
+                                    ðŸ“
                                     {selectedBatch.notes && selectedBatch.notes !== 'actual physical qty = ' && (
                                         <span className="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>
                                     )}
@@ -766,8 +871,8 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                     <div className="absolute top-10 right-0 z-50 w-64" style={{ animation: 'fadeIn 0.15s ease-out' }}>
                                         <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
                                             <div className="flex justify-between items-center mb-2">
-                                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
-                                                <button onClick={() => setShowBatchNote(false)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
+                                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ðŸ“Œ Note</span>
+                                                <button onClick={() => setShowBatchNote(false)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">âœ•</button>
                                             </div>
                                             <textarea
                                                 className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
@@ -791,7 +896,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                 <input
                                     type="text"
                                     placeholder="Serials..."
-                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 outline-none w-32 text-sm"
+                                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-[#205f64] outline-none w-32 text-sm"
                                     value={serialSearchTerm}
                                     onChange={e => setSerialSearchTerm(e.target.value)}
                                 />
@@ -799,17 +904,23 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                         </div>
                     </div>
 
+                    {isLoadingBatchData && (
+                        <div className="mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg flex items-center justify-between text-xs font-bold animate-pulse">
+                            <span>ðŸ”„ Syncing full database testing data for all cells in this batch...</span>
+                        </div>
+                    )}
+
                     {/* Redesigned Grading Control Panel */}
                     {(selectedBatch.category || '').toLowerCase().includes('cell') && (
                         <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
                             <div className="flex justify-between items-center mb-3">
                                 <h3 className="font-semibold text-slate-700 flex items-center">
-                                    <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded mr-2 font-bold">New</span>
+                                    <span className="bg-[#205f64] text-[#0D0D0D] text-xs px-2 py-1 rounded mr-2 font-bold">New</span>
                                     Cell Grading System
                                 </h3>
                                 <button
                                     onClick={() => setShowGrading(!showGrading)}
-                                    className="text-xs text-blue-600 hover:underline font-bold"
+                                    className="text-xs text-[#498e72] hover:underline font-bold"
                                 >
                                     {showGrading ? 'Hide Grading Tools' : 'Show Grading Tools'}
                                 </button>
@@ -842,7 +953,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 onChange={e => setGradingConfig({ ...gradingConfig, mode: e.target.value as GradeMode })}
                                             >
                                                 <option value="capacity">Capacity (Ah)</option>
-                                                <option value="resistance">Resistance (mΩ)</option>
+                                                <option value="resistance">Resistance (mÎ©)</option>
                                                 <option value="voltage">Voltage (V)</option>
                                             </select>
                                         </div>
@@ -880,7 +991,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                     <div className="mt-4 flex justify-end">
                                         <button
                                             onClick={handleApplyAndSave}
-                                            className="bg-blue-600 text-white px-6 py-2 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-blue-700 shadow-sm transition-colors flex items-center"
+                                            className="bg-[#205f64] text-[#0D0D0D] px-6 py-2 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-[#498e72] hover:text-white shadow-sm transition-colors flex items-center"
                                         >
                                             <Save size={16} className="mr-2" />
                                             Save Grading & Batch Info
@@ -896,7 +1007,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="p-3 border-b font-semibold text-gray-600 w-10 text-center">
-                                        <input type="checkbox" onChange={handleSelectAll} checked={processedSerials.length > 0 && selectedSerials.size === processedSerials.length} className="rounded border-gray-300 focus:ring-blue-500 h-4 w-4 text-blue-600 cursor-pointer" />
+                                        <input type="checkbox" onChange={handleSelectAll} checked={processedSerials.length > 0 && selectedSerials.size === processedSerials.length} className="rounded border-gray-300 focus:ring-[#205f64] h-4 w-4 text-[#498e72] cursor-pointer" />
                                     </th>
                                     <th
                                         className="p-3 border-b font-semibold text-gray-600 w-16 text-center cursor-pointer hover:bg-gray-100 group select-none"
@@ -917,7 +1028,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 className="p-3 border-b font-semibold text-gray-600 w-24 cursor-pointer hover:bg-gray-100 group select-none"
                                                 onClick={() => handleSort('resistance')}
                                             >
-                                                <div className="flex items-center gap-1">Res (mΩ) {getSortIcon('resistance')}</div>
+                                                <div className="flex items-center gap-1">Res (mÎ©) {getSortIcon('resistance')}</div>
                                             </th>
                                             <th
                                                 className="p-3 border-b font-semibold text-gray-600 w-24 cursor-pointer hover:bg-gray-100 group select-none"
@@ -932,7 +1043,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                     <select
                                                         value={gradeFilter}
                                                         onChange={(e) => setGradeFilter(e.target.value)}
-                                                        className="text-[10px] border border-gray-300 rounded p-0.5 font-normal bg-white focus:outline-none focus:border-blue-500 w-20"
+                                                        className="text-[10px] border border-gray-300 rounded p-0.5 font-normal bg-white focus:outline-none focus:border-[#205f64] w-20"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <option value="all">All</option>
@@ -959,13 +1070,13 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                         : (result.passed !== undefined);
 
                                     return (
-                                        <tr key={serial} className={`hover:bg-gray-50 transition-colors ${selectedSerials.has(serial) ? 'bg-blue-50' : ''}`}>
+                                        <tr key={serial} className={`hover:bg-gray-50 transition-colors ${selectedSerials.has(serial) ? 'bg-[#205f64]/20' : ''}`}>
                                             <td className="p-3 border-b text-center">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedSerials.has(serial)}
                                                     onChange={() => handleToggleSelect(serial)}
-                                                    className="rounded border-gray-300 focus:ring-blue-500 h-4 w-4 text-blue-600 cursor-pointer"
+                                                    className="rounded border-gray-300 focus:ring-[#205f64] h-4 w-4 text-[#498e72] cursor-pointer"
                                                 />
                                             </td>
                                             <td className="p-3 border-b text-center text-gray-500 text-sm">{index}</td>
@@ -976,27 +1087,39 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                         <input
                                                             type="number"
                                                             step="0.01"
-                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-[#205f64]"
                                                             value={result.voltage ?? ''}
-                                                            onChange={(e) => handleInputChange(serial, { voltage: parseFloat(e.target.value) })}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const parsed = val === '' ? undefined : parseFloat(val);
+                                                                handleInputChange(serial, { voltage: parsed !== undefined && !isNaN(parsed) ? parsed : undefined });
+                                                            }}
                                                         />
                                                     </td>
                                                     <td className="p-3 border-b">
                                                         <input
                                                             type="number"
                                                             step="0.01"
-                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-[#205f64]"
                                                             value={result.resistance ?? ''}
-                                                            onChange={(e) => handleInputChange(serial, { resistance: parseFloat(e.target.value) })}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const parsed = val === '' ? undefined : parseFloat(val);
+                                                                handleInputChange(serial, { resistance: parsed !== undefined && !isNaN(parsed) ? parsed : undefined });
+                                                            }}
                                                         />
                                                     </td>
                                                     <td className="p-3 border-b">
                                                         <input
                                                             type="number"
                                                             step="0.01"
-                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full p-1 border rounded focus:ring-2 focus:ring-[#205f64]"
                                                             value={result.capacity ?? ''}
-                                                            onChange={(e) => handleInputChange(serial, { capacity: parseFloat(e.target.value) })}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const parsed = val === '' ? undefined : parseFloat(val);
+                                                                handleInputChange(serial, { capacity: parsed !== undefined && !isNaN(parsed) ? parsed : undefined });
+                                                            }}
                                                         />
                                                     </td>
                                                     <td className="p-3 border-b text-center">
@@ -1040,7 +1163,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 {isTested ? (
                                                     <CheckCircleIcon />
                                                 ) : (
-                                                    <span className="text-gray-300">•</span>
+                                                    <span className="text-gray-300">â€¢</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -1057,3 +1180,4 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 };
 
 export default Testing;
+

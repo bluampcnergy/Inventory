@@ -8,6 +8,7 @@ import InventoryPanel from './InventoryPanel';
 import GSTReturnPanel from './GSTReturnPanel';
 import InvoiceMaker from './InvoiceMaker';
 import PriceList from './PriceList';
+import LedgerPanel from './LedgerPanel';
 import { extractInvoiceData } from '../../services/geminiService';
 import { extractInvoiceDataLocal, testOllamaConnection } from '../../services/ollamaService';
 import { extractInvoiceDataOpenRouter, testOpenRouterConnection } from '../../services/openrouterService';
@@ -24,7 +25,7 @@ if (pdfjs.GlobalWorkerOptions) {
     pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 }
 
-type ActiveTab = 'upload' | 'dashboard' | 'expenses' | 'gst' | 'maker' | 'prices';
+type ActiveTab = 'upload' | 'dashboard' | 'expenses' | 'gst' | 'maker' | 'prices' | 'ledger';
 type AIProvider = 'gemini' | 'ollama' | 'openrouter';
 
 // Batch Job Interface
@@ -591,6 +592,10 @@ const InvoiceModule: React.FC<InvoiceModuleProps> = ({ currentUser, companyProfi
 
             {activeTab === 'prices' && (
                 <PriceList priceList={priceList} setPriceList={setPriceList} />
+            )}
+
+            {activeTab === 'ledger' && (
+                <LedgerPanel currentUser={currentUser} companyProfiles={companyProfiles} />
             )}
         </div>
     );

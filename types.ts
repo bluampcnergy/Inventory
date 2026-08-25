@@ -1,4 +1,3 @@
-
 export type View =
   | 'home'
   | 'received'
@@ -20,9 +19,49 @@ export type View =
   | 'finance_expenses'
   | 'finance_prices'
   | 'finance_maker'
+  | 'finance_ledger'
   | 'supplies'
-  | 'webmail'
-  | 'help';
+  | 'help'
+  | 'webmail';
+
+export interface WebmailAccount {
+  id: string;
+  email: string;
+  senderName: string;
+  imapHost: string;
+  imapPort: number;
+  smtpHost: string;
+  smtpPort: number;
+  username: string;
+  password?: string;
+  isDefault?: boolean;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  size: string;
+  type: string;
+  dataUrl?: string;
+}
+
+export interface EmailMessage {
+  id: string;
+  accountEmail: string;
+  folder: 'inbox' | 'starred' | 'sent' | 'drafts' | 'trash';
+  from: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  date: string;
+  timestamp: number;
+  snippet: string;
+  bodyHtml: string;
+  bodyText?: string;
+  isUnread: boolean;
+  isStarred?: boolean;
+  hasAttachments?: boolean;
+  attachments?: EmailAttachment[];
+}
 
 export interface PriceListItem {
   id: string;
@@ -70,9 +109,11 @@ export interface ReceivedGood {
   makeModel: string;
   supplier: string;
   quantity: number;
-  initialQuantity?: number; // Original entry quantity when received/logged
-  lowStockThresholdPercent?: number; // Low stock alert threshold (0-100% of original entry, default 20%)
-  ignoreReplenishment?: boolean; // Set to true to ignore low stock alerts (do not replenish)
+  initialQuantity?: number; // Initial batch size / original entry quantity
+  uom?: 'qty' | 'grams' | 'cm' | string; // Unit of Measurement (default: 'qty')
+  lowStockThresholdPercent?: number; // Configured safety limit percentage (0 - 100%, default: 20%)
+  ignoreReplenishment?: boolean; // Set true if item should not be replenished (persisted & suppresses alerts)
+  isIgnoredForAlerts?: boolean; // Alias / DB sync flag for ignore replenishment
   status: ReceivedGoodStatus | string;
   damagedCount: number;
   invoiceNumber: string;
@@ -108,6 +149,7 @@ export interface RecipeComponent {
   masterItemName?: string;
   receivedGoodId?: string;
   quantityPerUnit: number;
+  uom?: string;
 }
 
 export interface Recipe {
@@ -200,6 +242,7 @@ export interface CompanyProfile {
   id: string;
   name: string;
   gstNumber: string;
+  gstin?: string;
   shippingAddress: string;
   email: string;
   contactPerson: string;
@@ -294,14 +337,38 @@ export interface InvoiceItem {
 export interface SupplyRecord {
   id: string;
   item_name: string;
-  direction: 'inward' | 'outward';
+  specification?: string;
+  direction?: 'inward' | 'outward';
   from_company?: string;
   to_company?: string;
-  is_ordered: boolean;
-  is_received: boolean;
-  is_shipped: boolean;
+  supplier_id?: string;
+  website_url?: string;
+  contact_name?: string;
+  contact_number?: string;
+  contact_email?: string;
+  status?: 'to_be_ordered' | 'ordered' | 'delivered';
+  target_quantity?: number;
+  uom?: string;
+  rfq_text?: string;
+  is_ignored_for_alerts?: boolean;
+  raw_good_id?: string;
+  is_ordered?: boolean;
+  is_received?: boolean;
+  is_shipped?: boolean;
   timestamp: number;
   created_by?: string;
+}
+
+export interface InvoiceEditHistoryEntry {
+  edited_at: string;
+  edited_by: string;
+  previous_grand_total?: number;
+  new_grand_total?: number;
+  previous_invoice_number?: string;
+  new_invoice_number?: string;
+  notes?: string;
+  summary?: string;
+  changes?: string[];
 }
 
 export interface ExtractedInvoice {
@@ -309,7 +376,7 @@ export interface ExtractedInvoice {
   created_at?: string;
   timestamp?: string;
   filename: string;
-  document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'purchase_order' | 'quotation' | 'proforma_invoice' | 'other';
+  document_type: 'invoice' | 'receipt' | 'credit_note' | 'debit_note' | 'generated_invoice' | 'generated_po' | 'generated_debit_note' | 'generated_credit_note' | 'generated_quotation' | 'generated_proforma_invoice' | 'purchase_order' | 'quotation' | 'proforma_invoice' | 'other';
   source_type: 'sales' | 'purchase';
   issuer_details: InvoiceParty;
   receiver_details: InvoiceParty;
@@ -331,6 +398,7 @@ export interface ExtractedInvoice {
     tax_mode?: 'intra' | 'inter';
     mail_sent?: boolean;
     ui_config?: Record<string, any>;
+    edit_history?: InvoiceEditHistoryEntry[];
   };
   items: InvoiceItem[];
   totals: {
@@ -390,40 +458,3 @@ export const EMPTY_INVOICE: ExtractedInvoice = {
   requires_review: true,
   image_link: ''
 };
-
-export interface WebmailAccount {
-    id: string;
-    email: string;
-    senderName: string;
-    imapHost: string;
-    imapPort: number;
-    smtpHost: string;
-    smtpPort: number;
-    username: string;
-    password?: string;
-    isDefault?: boolean;
-}
-
-export interface EmailAttachment {
-    filename: string;
-    size: string;
-    type: string;
-    contentBase64?: string;
-}
-
-export interface EmailMessage {
-    id: string;
-    accountEmail: string;
-    folder: 'inbox' | 'starred' | 'sent' | 'drafts' | 'trash';
-    from: string;
-    to: string;
-    subject: string;
-    date: string;
-    timestamp: number;
-    snippet: string;
-    bodyHtml: string;
-    isUnread?: boolean;
-    isStarred?: boolean;
-    hasAttachments?: boolean;
-    attachments?: EmailAttachment[];
-}

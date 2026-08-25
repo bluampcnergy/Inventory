@@ -1,16 +1,16 @@
-
+﻿
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { ExtractedInvoice, InvoiceTemplate, EMPTY_INVOICE, InvoiceItem, CompanyProfile, BankDetails, PriceListItem, FinishedGood, Recipe } from '../../types';
-import { recalculateInvoiceTotals, safeRender, amountToWords, getTaxMode, getCurrencySymbol } from '../../utils/invoiceUtils';
+import { ExtractedInvoice, InvoiceTemplate, EMPTY_INVOICE, InvoiceItem, CompanyProfile, BankDetails, PriceListItem, FinishedGood, Recipe, InvoiceEditHistoryEntry } from '../../types';
+import { recalculateInvoiceTotals, safeRender, amountToWords, getTaxMode, getCurrencySymbol, computeInvoiceChanges } from '../../utils/invoiceUtils';
 import { generateUnitIds } from '../../utils';
-import { Save, Printer, Plus, Trash2, SettingsIcon, Columns, Wallet, Download, RefreshCw, ChevronUp, ChevronDown, Loader2, LayoutDashboard } from './Icons';
+import { Save, Printer, Plus, Trash2, SettingsIcon, Columns, Wallet, Download, RefreshCw, ChevronUp, ChevronDown, Loader2, LayoutDashboard, FileText, History } from './Icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { ImportIcon } from '../icons/ImportIcon';
 import AiChatPanel from './AiChatPanel';
 
 interface InvoiceMakerProps {
-    currentUser: { username: string } | null;
+    currentUser: { username: string; role?: 'admin' | 'user' | 'billing' | 'dashboard_user' } | null;
     username?: string;
     companyProfiles?: CompanyProfile[];
     initialData?: ExtractedInvoice | null;
@@ -18,6 +18,7 @@ interface InvoiceMakerProps {
     finishedGoods?: FinishedGood[];
     recipes?: Recipe[];
     addLogEntry?: (action: string, details: string) => void;
+    setInvoiceDraft?: (draft: ExtractedInvoice | null) => void;
 }
 
 // Extend config locally to support new UI flags without breaking shared types immediately
@@ -40,7 +41,7 @@ type ExtendedConfig = InvoiceTemplate['config'] & {
     shippedToLabel?: string;
 };
 
-const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, companyProfiles = [], initialData, priceList = [], finishedGoods = [], recipes = [], addLogEntry }) => {
+const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, companyProfiles = [], initialData, priceList = [], finishedGoods = [], recipes = [], addLogEntry, setInvoiceDraft }) => {
     // Load draft from local storage if not editing an existing record
     const draft = useMemo(() => {
         if (initialData?.id) return null;
@@ -51,15 +52,28 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         return null;
     }, [initialData]);
 
-    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation' | 'proforma'>(draft?.docType || 'invoice');
-    const [customTitle, setCustomTitle] = useState(draft?.customTitle || 'INVOICE');
+    const [docType, setDocType] = useState<'invoice' | 'po' | 'quotation' | 'proforma' | 'debit_note' | 'credit_note'>(() => {
+        if (draft?.docType) return draft.docType;
+        if (initialData?.document_type) {
+            const dt = initialData.document_type;
+            if (dt === 'generated_po' || dt === 'po' || dt === 'purchase_order') return 'po';
+            if (dt === 'generated_quotation' || dt === 'quotation') return 'quotation';
+            if (dt === 'generated_proforma_invoice' || dt === 'proforma_invoice' || dt === 'proforma') return 'proforma';
+            if (dt === 'generated_debit_note' || dt === 'debit_note') return 'debit_note';
+            if (dt === 'generated_credit_note' || dt === 'credit_note') return 'credit_note';
+            return 'invoice';
+        }
+        return 'invoice';
+    });
+    const [customTitle, setCustomTitle] = useState(draft?.customTitle || (docType === 'po' ? 'PURCHASE ORDER' : docType === 'quotation' ? 'QUOTATION' : docType === 'proforma' ? 'PROFORMA INVOICE' : docType === 'debit_note' ? 'DEBIT NOTE' : docType === 'credit_note' ? 'CREDIT NOTE' : 'INVOICE'));
     const [doc, setDoc] = useState<ExtractedInvoice>(() => {
         const base = initialData || draft?.doc || EMPTY_INVOICE;
+        const computedSourceType = (draft?.docType || initialData?.document_type) === 'generated_po' || (draft?.docType as string) === 'po' || docType === 'po' ? 'purchase' : 'sales';
         return { 
             ...EMPTY_INVOICE,
             ...base, 
-            source_type: 'sales', 
-            document_type: 'generated_invoice',
+            source_type: computedSourceType, 
+            document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : docType === 'quotation' ? 'generated_quotation' : docType === 'debit_note' ? 'generated_debit_note' : docType === 'credit_note' ? 'generated_credit_note' : 'generated_proforma_invoice',
             receiver_details: base.receiver_details || EMPTY_INVOICE.receiver_details,
             issuer_details: { 
                 ...EMPTY_INVOICE.issuer_details,
@@ -90,6 +104,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const [stamp, setStamp] = useState<string | null>(draft?.stamp || null);
     const [signature, setSignature] = useState<string | null>(draft?.signature || null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Baseline reference of document before edits to compute exact diffs
+    const baselineDocRef = useRef<ExtractedInvoice | null>(null);
+    const baselineConfigRef = useRef<ExtendedConfig | null>(null);
 
     // Document Search State
     const [searchDocTerm, setSearchDocTerm] = useState('');
@@ -206,6 +224,16 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         return () => window.removeEventListener('message', handleMessage);
     }, [lastSelectedType]);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isAddCompanyModalOpen) {
+                setIsAddCompanyModalOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isAddCompanyModalOpen]);
+
     const handleDropdownChange = (type: 'issuer' | 'receiver' | 'supplier', value: string) => {
         if (value === 'ADD_NEW') {
             setLastSelectedType(type);
@@ -315,9 +343,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                 dataToLoad.supplier_details = (dataToLoad.invoice_metadata as any).supplier_details;
             }
             setDoc(dataToLoad);
-            const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : initialData.document_type === 'generated_proforma_invoice' ? 'proforma' : 'invoice';
+            const type = initialData.document_type === 'generated_po' ? 'po' : initialData.document_type === 'generated_quotation' ? 'quotation' : initialData.document_type === 'generated_proforma_invoice' ? 'proforma' : initialData.document_type === 'generated_debit_note' ? 'debit_note' : initialData.document_type === 'generated_credit_note' ? 'credit_note' : 'invoice';
             setDocType(type);
-            setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+            setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : type === 'quotation' ? 'QUOTATION' : type === 'debit_note' ? 'DEBIT NOTE' : type === 'credit_note' ? 'CREDIT NOTE' : 'PROFORMA INVOICE');
 
             if (initialData.invoice_metadata?.ui_config) {
                 const loadedConfig = initialData.invoice_metadata.ui_config;
@@ -337,7 +365,12 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                 setLogo(loadedConfig.logoUrl || null);
                 setStamp(loadedConfig.stampUrl || null);
                 setSignature(loadedConfig.signatureUrl || null);
+                baselineConfigRef.current = JSON.parse(JSON.stringify(loadedConfig));
+            } else {
+                baselineConfigRef.current = JSON.parse(JSON.stringify(config));
             }
+
+            baselineDocRef.current = JSON.parse(JSON.stringify(dataToLoad));
 
             // Hydrate from Slack AI payload if present
             if ((initialData.invoice_metadata as any)?.slack_ai_payload) {
@@ -346,13 +379,20 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         }
     }, [initialData]);
 
+    useEffect(() => {
+        if (!baselineDocRef.current && (initialData || doc)) {
+            baselineDocRef.current = JSON.parse(JSON.stringify(initialData || doc));
+            baselineConfigRef.current = JSON.parse(JSON.stringify(config));
+        }
+    }, []);
+
     const handleApplyAiData = (data: any) => {
         if (!data) return;
 
         // 1. Doc Type & Template
         if (data.document_type) {
             setDocType(data.document_type);
-            setCustomTitle(data.document_type === 'invoice' ? 'INVOICE' : data.document_type === 'po' ? 'PURCHASE ORDER' : data.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+            setCustomTitle(data.document_type === 'invoice' ? 'INVOICE' : data.document_type === 'po' ? 'PURCHASE ORDER' : data.document_type === 'quotation' ? 'QUOTATION' : data.document_type === 'debit_note' ? 'DEBIT NOTE' : data.document_type === 'credit_note' ? 'CREDIT NOTE' : 'PROFORMA INVOICE');
         }
         if (data.template_name) {
             const normalizedAiName = String(data.template_name).toLowerCase().trim();
@@ -385,21 +425,21 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             }
             
             // Default Customer (Receiver) and Shipped To to Bluamp
-            const bluampProfile = companyProfiles.find(c => c.name?.toUpperCase()?.includes('BLUAMP'));
-            if (bluampProfile) {
-                loadCompanyProfile('receiver', bluampProfile.name);
+            const datlionProfile = companyProfiles.find(c => c.name?.toUpperCase()?.includes('DATLION CNERGY'));
+            if (datlionProfile) {
+                loadCompanyProfile('receiver', datlionProfile.name);
             } else {
-                updateParty('receiver', 'name', 'BLUAMP ENERGIES PRIVATE LIMITED');
+                updateParty('receiver', 'name', 'DATLION CNERGY PRIVATE LIMITED');
             }
             
             setDoc(prev => ({
                 ...prev,
                 shipped_to_details: {
-                    name: bluampProfile?.name || 'BLUAMP ENERGIES PRIVATE LIMITED',
-                    address: bluampProfile?.shippingAddress || '',
-                    gstin: bluampProfile?.gstNumber || '',
-                    phone: bluampProfile?.phoneNumber || '',
-                    email: bluampProfile?.email || ''
+                    name: datlionProfile?.name || 'DATLION CNERGY PRIVATE LIMITED',
+                    address: datlionProfile?.shippingAddress || '',
+                    gstin: datlionProfile?.gstNumber || '',
+                    phone: datlionProfile?.phoneNumber || '',
+                    email: datlionProfile?.email || ''
                 }
             }));
         } else {
@@ -556,7 +596,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         // Using client-side filter of recent documents to avoid PostgREST JSON .or() operator limitations
         const { data, error } = await supabase
             .from('invoices')
-            .select('*')
+            .select('id, invoice_metadata, receiver_details, issuer_details, totals, document_type, source_type, filename, created_at, items')
             .order('created_at', { ascending: false })
             .limit(50);
         
@@ -575,9 +615,16 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
 
     const loadPreviousDocument = (selectedDoc: ExtractedInvoice) => {
         if (!confirm("This will overwrite your current invoice data. Proceed?")) return;
-        setDoc(selectedDoc);
+        const targetDocType = selectedDoc.document_type === 'generated_po' || selectedDoc.document_type === 'purchase_order' || (selectedDoc.document_type as string) === 'po' ? 'po' : 'invoice';
+        const clonedDoc: ExtractedInvoice = {
+            ...selectedDoc,
+            source_type: targetDocType === 'po' ? 'purchase' : 'sales'
+        };
+        setDoc(clonedDoc);
+        baselineDocRef.current = JSON.parse(JSON.stringify(clonedDoc));
+        baselineConfigRef.current = JSON.parse(JSON.stringify(config));
         if (selectedDoc.document_type) {
-            setDocType(selectedDoc.document_type as any);
+            setDocType(targetDocType as any);
             setCustomTitle(selectedDoc.document_type === 'generated_invoice' ? 'INVOICE' : (selectedDoc.document_type === 'purchase_order' || selectedDoc.document_type === 'generated_po' || (selectedDoc.document_type as string) === 'po') ? 'PURCHASE ORDER' : selectedDoc.document_type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
         }
         setSearchDocTerm('');
@@ -631,10 +678,20 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         generateInvoiceNumber(tmpl.type as string);
     };
 
-    const handleDocTypeChange = (type: 'invoice' | 'po' | 'quotation' | 'proforma') => {
+    const handleDocTypeChange = (type: 'invoice' | 'po' | 'quotation' | 'proforma' | 'debit_note' | 'credit_note') => {
         setDocType(type);
-        setCustomTitle(type === 'invoice' ? 'INVOICE' : type === 'po' ? 'PURCHASE ORDER' : type === 'quotation' ? 'QUOTATION' : 'PROFORMA INVOICE');
+        const titleMap: Record<string, string> = { invoice: 'INVOICE', po: 'PURCHASE ORDER', quotation: 'QUOTATION', proforma: 'PROFORMA INVOICE', debit_note: 'DEBIT NOTE', credit_note: 'CREDIT NOTE' };
+        setCustomTitle(titleMap[type] || 'INVOICE');
         generateInvoiceNumber(type);
+        setDoc(prev => ({
+            ...prev,
+            source_type: type === 'po' ? 'purchase' : 'sales',
+            invoice_metadata: { ...prev.invoice_metadata, note_type: (type === 'debit_note' ? 'debit' : type === 'credit_note' ? 'credit' : undefined) as any }
+        }));
+        // Auto-expand note section for DN/CN
+        if (type === 'debit_note' || type === 'credit_note') {
+            setShowNoteSection(true);
+        }
     };
 
     const updateParty = (side: 'issuer' | 'receiver' | 'supplier', field: string, val: string) => {
@@ -745,6 +802,24 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
         setDoc(prev => ({ ...prev, items: newItems, totals: { ...prev.totals, ...recalculateInvoiceTotals(newItems) } }));
     };
 
+    const downloadItemCSVTemplate = () => {
+        const csvContent = [
+            'Description,HSN/SAC,Quantity,Unit Price,Discount,Tax Rate %',
+            'Solar Inverter 5kVA,85044090,2,35000,500,18',
+            'LiFePO4 Battery Pack 48V,85076000,1,68000,0,18',
+            'Solar Cable 6sqmm (100m Roll),85444990,3,4500,100,18'
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'invoice_items_template.csv';
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleItemImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -754,33 +829,82 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             const text = event.target?.result;
             if (typeof text === 'string') {
                 const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-                if (lines.length < 2) return;
+                if (lines.length < 2) {
+                    alert('CSV file must contain a header row and at least one item data row.');
+                    return;
+                }
+
+                // Check for dynamic headers
+                const headerLine = lines[0].toLowerCase();
+                const headers = headerLine.split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+                
+                const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('item') || h.includes('name') || h.includes('product') || h.includes('model'));
+                const hsnIdx = headers.findIndex(h => h.includes('hsn') || h.includes('sac') || h.includes('code'));
+                const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity') || h.includes('count'));
+                const rateIdx = headers.findIndex(h => h.includes('price') || h.includes('rate') || h.includes('unit') || h.includes('amount'));
+                const discIdx = headers.findIndex(h => h.includes('disc'));
+                const taxIdx = headers.findIndex(h => h.includes('tax') || h.includes('gst') || h.includes('rate %') || h.includes('igst'));
 
                 const newItems: InvoiceItem[] = [];
-                lines.slice(1).forEach(line => {
-                    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-                    if (cols.length >= 4) {
-                        const quantity = parseFloat(cols[2]) || 0;
-                        const unit_price = parseFloat(cols[3]) || 0;
-                        const igst_rate = cols[4] ? parseFloat(cols[4]) : 18;
-                        const taxable_value = quantity * unit_price;
-                        const igst_amount = taxable_value * (igst_rate / 100);
+                const taxMode = getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin, doc.invoice_metadata.tax_mode);
 
-                        newItems.push({
-                            description: cols[0],
-                            hsn_sac: cols[1],
-                            quantity,
-                            unit_price,
-                            taxable_value,
-                            cgst_rate: 0,
-                            cgst_amount: 0,
-                            sgst_rate: 0,
-                            sgst_amount: 0,
-                            igst_rate,
-                            igst_amount,
-                            total_value: taxable_value + igst_amount
-                        });
+                lines.slice(1).forEach(line => {
+                    const cols: string[] = [];
+                    let cur = '';
+                    let inQuotes = false;
+                    for (let c = 0; c < line.length; c++) {
+                        const char = line[c];
+                        if (char === '"') inQuotes = !inQuotes;
+                        else if (char === ',' && !inQuotes) {
+                            cols.push(cur.trim().replace(/^"|"$/g, ''));
+                            cur = '';
+                        } else cur += char;
                     }
+                    cols.push(cur.trim().replace(/^"|"$/g, ''));
+
+                    const desc = descIdx !== -1 ? cols[descIdx] : cols[0];
+                    if (!desc) return;
+
+                    const hsn = hsnIdx !== -1 ? (cols[hsnIdx] || '') : (cols[1] || '');
+                    const quantity = qtyIdx !== -1 ? (parseFloat(cols[qtyIdx]) || 1) : (parseFloat(cols[2]) || 1);
+                    const unit_price = rateIdx !== -1 ? (parseFloat(cols[rateIdx]) || 0) : (parseFloat(cols[3]) || 0);
+                    const discount = discIdx !== -1 ? (parseFloat(cols[discIdx]) || 0) : 0;
+                    const igst_rate = taxIdx !== -1 ? (parseFloat(cols[taxIdx]) || 18) : (cols[4] ? parseFloat(cols[4]) : 18);
+
+                    const taxable_value = Math.max(0, (quantity * unit_price) - discount);
+                    let cgst_rate = 0;
+                    let cgst_amount = 0;
+                    let sgst_rate = 0;
+                    let sgst_amount = 0;
+                    let igst_amount = 0;
+
+                    if (taxMode === 'intra') {
+                        const halfRate = igst_rate / 2;
+                        cgst_rate = halfRate;
+                        cgst_amount = taxable_value * (halfRate / 100);
+                        sgst_rate = halfRate;
+                        sgst_amount = taxable_value * (halfRate / 100);
+                    } else {
+                        igst_amount = taxable_value * (igst_rate / 100);
+                    }
+
+                    const total_value = taxable_value + cgst_amount + sgst_amount + igst_amount;
+
+                    newItems.push({
+                        description: desc,
+                        hsn_sac: hsn,
+                        quantity,
+                        unit_price,
+                        discount,
+                        taxable_value,
+                        cgst_rate,
+                        cgst_amount,
+                        sgst_rate,
+                        sgst_amount,
+                        igst_rate,
+                        igst_amount,
+                        total_value
+                    });
                 });
 
                 if (newItems.length > 0) {
@@ -792,6 +916,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             totals: { ...prev.totals, ...recalculateInvoiceTotals(updatedItems) }
                         };
                     });
+                    if (addLogEntry) addLogEntry('Imported Table Items', `Imported ${newItems.length} items into invoice via CSV.`);
+                    alert(`âœ… Successfully imported ${newItems.length} line items!`);
+                } else {
+                    alert('No valid items were parsed from the CSV file.');
                 }
             }
         };
@@ -862,6 +990,100 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
     const removeLogo = () => { setLogo(null); if (logoInputRef.current) logoInputRef.current.value = ''; };
     const removeStamp = () => { setStamp(null); if (stampInputRef.current) stampInputRef.current.value = ''; };
     const removeSignature = () => { setSignature(null); if (signatureInputRef.current) signatureInputRef.current.value = ''; };
+    const isEditingExistingRecord = Boolean(initialData?.id || doc.id);
+    const editingRecordId = doc.id || initialData?.id;
+
+    const handleUpdateRecord = async () => {
+        if (currentUser?.role !== 'admin') {
+            return alert("Access Denied: Updating existing records is restricted to Director Admins only.");
+        }
+        const targetId = editingRecordId;
+        if (!targetId) {
+            return alert("No existing record ID found to update.");
+        }
+        const invNum = doc.invoice_metadata.invoice_number;
+        if (!invNum) return alert("Please provide an invoice number.");
+
+        setIsSaving(true);
+        try {
+            const now = new Date().toISOString();
+            const editorName = currentUser?.username || username || 'system';
+            
+            const oldDoc = baselineDocRef.current || initialData || null;
+            const oldConfig = baselineConfigRef.current || null;
+            const diff = computeInvoiceChanges(oldDoc, doc, oldConfig, config);
+
+            const historyEntry: InvoiceEditHistoryEntry = {
+                edited_at: now,
+                edited_by: editorName,
+                previous_grand_total: oldDoc?.totals?.grand_total ?? doc.totals?.grand_total,
+                new_grand_total: doc.totals?.grand_total,
+                previous_invoice_number: oldDoc?.invoice_metadata?.invoice_number ?? doc.invoice_metadata?.invoice_number,
+                new_invoice_number: doc.invoice_metadata?.invoice_number,
+                summary: diff.summary,
+                changes: diff.changes
+            };
+
+            const prevHistory = doc.invoice_metadata?.edit_history || initialData?.invoice_metadata?.edit_history || [];
+            const updatedHistory = [...prevHistory, historyEntry];
+
+            const record = {
+                ...doc,
+                source_type: docType === 'po' ? 'purchase' : 'sales',
+                invoice_metadata: {
+                    ...doc.invoice_metadata,
+                    edit_history: updatedHistory,
+                    shipped_to_details: doc.shipped_to_details,
+                    supplier_details: doc.supplier_details,
+                    ui_config: {
+                        ...config,
+                        logoUrl: logo || undefined,
+                        stampUrl: stamp || undefined,
+                        signatureUrl: signature || undefined,
+                        visibleColumns,
+                        billedToLabel,
+                        shippedToLabel
+                    }
+                },
+                filename: invNum,
+                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : docType === 'quotation' ? 'generated_quotation' : docType === 'debit_note' ? 'generated_debit_note' : docType === 'credit_note' ? 'generated_credit_note' : 'generated_proforma_invoice',
+                uploaded_by: doc.uploaded_by || currentUser?.username || 'system',
+                requires_review: false
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, timestamp, created_at, shipped_to_details, supplier_details, ...cleanRecord } = record as any;
+
+            const { error: updateError } = await supabase
+                .from('invoices')
+                .update(cleanRecord)
+                .eq('id', targetId);
+
+            if (updateError) throw updateError;
+
+            // Update local baseline ref to newly saved record state
+            baselineDocRef.current = JSON.parse(JSON.stringify(record));
+            baselineConfigRef.current = JSON.parse(JSON.stringify(config));
+
+            // Update local state with history and id
+            setDoc(prev => ({
+                ...prev,
+                id: targetId,
+                invoice_metadata: {
+                    ...prev.invoice_metadata,
+                    edit_history: updatedHistory
+                }
+            }));
+
+            try { localStorage.removeItem('invoice_maker_draft'); } catch (e) {}
+            if (addLogEntry) addLogEntry('Updated Document', `Updated ${docType.toUpperCase()} document #${invNum}: ${diff.summary}`);
+            alert(`âœ… Document #${invNum} updated successfully in database! Revision logged with ${diff.changes.length} change(s).`);
+        } catch (error: any) {
+            alert("Error updating record: " + error.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const handleSaveRecord = async () => {
         const invNum = doc.invoice_metadata.invoice_number;
@@ -878,7 +1100,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
 
             if (checkError) {
                 console.warn('[Save] Duplicate check query failed:', checkError.message);
-                // Don't throw on query error — allow save to proceed with a warning
+                // Don't throw on query error â€” allow save to proceed with a warning
                 const proceed = confirm(`Warning: Could not verify if this invoice number already exists (${checkError.message}). Save anyway?`);
                 if (!proceed) { setIsSaving(false); return; }
             }
@@ -891,6 +1113,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             // Force invoice number as filename
             const record = {
                 ...doc,
+                source_type: docType === 'po' ? 'purchase' : 'sales',
                 invoice_metadata: {
                     ...doc.invoice_metadata,
                     shipped_to_details: doc.shipped_to_details,
@@ -906,7 +1129,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                     }
                 },
                 filename: invNum,
-                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : docType === 'quotation' ? 'generated_quotation' : 'generated_proforma_invoice',
+                document_type: docType === 'invoice' ? 'generated_invoice' : docType === 'po' ? 'generated_po' : docType === 'quotation' ? 'generated_quotation' : docType === 'debit_note' ? 'generated_debit_note' : docType === 'credit_note' ? 'generated_credit_note' : 'generated_proforma_invoice',
                 uploaded_by: currentUser?.username || 'system',
                 requires_review: false
             };
@@ -959,6 +1182,8 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             if (currentDocType === 'po') typeTag = 'PO';
             else if (currentDocType === 'quotation') typeTag = 'QUO';
             else if (currentDocType === 'proforma') typeTag = 'PRO';
+            else if (currentDocType === 'debit_note') typeTag = 'DN';
+            else if (currentDocType === 'credit_note') typeTag = 'CN';
 
             const newPrefix = `${typeTag}/DC/${fyStr}/`;
             
@@ -968,10 +1193,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                 .select('invoice_metadata')
                 .ilike('invoice_metadata->>invoice_number', `${newPrefix}%`);
 
-            // Retry once if query fails (stale session)
-            if (queryError && _retryCount < 1) {
-                console.warn('[generateInvoiceNumber] Query failed, retrying...', queryError.message);
-                await new Promise(r => setTimeout(r, 500));
+            // Retry up to 3 times if query fails or returns empty during cold auth initialization
+            if ((queryError || (!data || data.length === 0)) && _retryCount < 3) {
+                const backoff = (_retryCount + 1) * 400;
+                await new Promise(r => setTimeout(r, backoff));
                 return generateInvoiceNumber(overrideDocType, overrideOtherParty, _retryCount + 1);
             }
 
@@ -1019,10 +1244,10 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             .select('invoice_metadata')
             .ilike('invoice_metadata->>invoice_number', `${fyPrefix}%`);
 
-        // Retry once if query fails (stale session)
-        if (queryErrorOld && _retryCount < 1) {
-            console.warn('[generateInvoiceNumber] Old path query failed, retrying...', queryErrorOld.message);
-            await new Promise(r => setTimeout(r, 500));
+        // Retry up to 3 times if query fails or returns empty during cold auth initialization
+        if ((queryErrorOld || (!data || data.length === 0)) && _retryCount < 3) {
+            const backoff = (_retryCount + 1) * 400;
+            await new Promise(r => setTimeout(r, backoff));
             return generateInvoiceNumber(overrideDocType, overrideOtherParty, _retryCount + 1);
         }
 
@@ -1119,16 +1344,50 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                         <button onClick={() => handleDocTypeChange('quotation')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'quotation' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Quote</button>
                         <button onClick={() => handleDocTypeChange('po')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'po' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>PO</button>
                         <button onClick={() => handleDocTypeChange('proforma')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'proforma' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'bg-white text-slate-600 border-slate-200'}`}>Proforma</button>
+                        <button onClick={() => handleDocTypeChange('debit_note')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'debit_note' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-500 border-red-200'}`}>DN</button>
+                        <button onClick={() => handleDocTypeChange('credit_note')} className={`px-2 py-1 text-xs rounded-lg border ${docType === 'credit_note' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-600 border-emerald-200'}`}>CN</button>
                     </div>
                 </div>
 
-                {/* Debit / Credit Note — minimizable */}
+                {isEditingExistingRecord && (
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-xl shadow-2xs">
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-2">
+                                <span className="p-1 bg-amber-500 text-white rounded font-bold text-[10px] uppercase tracking-wider">Editing Mode</span>
+                                <span className="text-xs font-bold text-amber-900 truncate max-w-[180px]">
+                                    Doc #{doc.invoice_metadata?.invoice_number || 'N/A'}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (confirm("Clear active edit mode and start a new blank invoice?")) {
+                                        setDoc({ ...EMPTY_INVOICE });
+                                        if (setInvoiceDraft) setInvoiceDraft(null);
+                                    }
+                                }}
+                                className="text-[10px] bg-white text-amber-800 border border-amber-300 px-2 py-0.5 rounded hover:bg-amber-100 font-bold"
+                            >
+                                New Blank
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-amber-700 font-mono mt-1">
+                            ID: {editingRecordId?.slice(0, 8)}...
+                            {doc.invoice_metadata?.edit_history && doc.invoice_metadata.edit_history.length > 0 && (
+                                <span className="ml-2 font-sans font-semibold text-amber-800">
+                                    â€¢ {doc.invoice_metadata.edit_history.length} revision(s)
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                )}
+
+                {/* Debit / Credit Note â€” minimizable */}
                 <div className="mb-4 border border-slate-200 rounded-lg overflow-hidden">
                     <button
                         onClick={() => setShowNoteSection(!showNoteSection)}
                         className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors text-xs font-bold text-slate-600 uppercase tracking-wider"
                     >
-                        <span>📋 Debit / Credit Note</span>
+                        <span>ðŸ“‹ Debit / Credit Note</span>
                         {showNoteSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     {showNoteSection && (
@@ -1136,7 +1395,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             <div>
                                 <label className="text-[10px] text-slate-400 uppercase font-bold">Type</label>
                                 <select
-                                    className="w-full text-sm p-1.5 border rounded bg-white outline-none focus:border-[#8EBF45]"
+                                    className="w-full text-sm p-1.5 border rounded bg-white outline-none focus:border-[#205f64]"
                                     value={doc.invoice_metadata.note_type || ''}
                                     onChange={e => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, note_type: e.target.value as any } }))}
                                 >
@@ -1149,7 +1408,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                 <div>
                                     <label className="text-[10px] text-slate-400 uppercase font-bold">Against Invoice No.</label>
                                     <input
-                                        className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#8EBF45]"
+                                        className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#205f64]"
                                         placeholder="INV-001"
                                         value={doc.invoice_metadata.related_invoice_number || ''}
                                         onChange={e => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, related_invoice_number: e.target.value } }))}
@@ -1159,7 +1418,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                     <label className="text-[10px] text-slate-400 uppercase font-bold">Dated</label>
                                     <input
                                         type="date"
-                                        className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#8EBF45]"
+                                        className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#205f64]"
                                         value={doc.invoice_metadata.related_invoice_date || ''}
                                         onChange={e => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, related_invoice_date: e.target.value } }))}
                                     />
@@ -1168,7 +1427,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             <div>
                                 <label className="text-[10px] text-slate-400 uppercase font-bold">Reason</label>
                                 <input
-                                    className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#8EBF45]"
+                                    className="w-full text-sm p-1.5 border rounded outline-none focus:border-[#205f64]"
                                     placeholder="e.g. Rate difference, quality issue"
                                     value={doc.invoice_metadata.note_reason || ''}
                                     onChange={e => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, note_reason: e.target.value } }))}
@@ -1183,7 +1442,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
 
                     <div className="flex gap-2 mb-2">
                         <select
-                            className="flex-1 text-sm p-2 border rounded bg-white outline-none focus:border-[#8EBF45]"
+                            className="flex-1 text-sm p-2 border rounded bg-white outline-none focus:border-[#205f64]"
                             value={selectedTemplateId}
                             onChange={(e) => {
                                 const id = e.target.value;
@@ -1217,7 +1476,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                     <div className="relative">
                         <input 
                             type="text" 
-                            className="w-full text-sm p-2 border rounded outline-none focus:border-[#8EBF45]" 
+                            className="w-full text-sm p-2 border rounded outline-none focus:border-[#205f64]" 
                             placeholder="Search by invoice # or name..."
                             value={searchDocTerm}
                             onChange={(e) => handleDocSearch(e.target.value)}
@@ -1282,9 +1541,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                         <div>
                             <label className="text-xs text-slate-500">Currency</label>
                             <select className="text-sm p-2 border rounded w-full" value={doc.totals?.currency || 'INR'} onChange={e => setDoc(prev => ({ ...prev, totals: { ...(prev.totals || { subtotal_taxable: 0, cgst_total: 0, sgst_total: 0, igst_total: 0, grand_total: 0 }), currency: e.target.value } }))}>
-                                <option value="INR">INR (₹)</option>
+                                <option value="INR">INR (â‚¹)</option>
                                 <option value="USD">USD ($)</option>
-                                <option value="RMB">RMB (¥)</option>
+                                <option value="RMB">RMB (Â¥)</option>
                             </select>
                         </div>
                     </div>
@@ -1302,19 +1561,19 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                 <div className="mb-6 space-y-3 border-b pb-6">
                     <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><LayoutDashboard size={14} /> Sections</h3>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                        <input type="checkbox" checked={config.showTotalsTable ?? true} onChange={e => setConfig({ ...config, showTotalsTable: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        <input type="checkbox" checked={config.showTotalsTable ?? true} onChange={e => setConfig({ ...config, showTotalsTable: e.target.checked })} className="rounded border-gray-300 text-[#205f64] focus:ring-[#205f64]" />
                         Show Amount in Words, Subtotal, Tax & Total
                     </label>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                        <input type="checkbox" checked={config.showTaxTable ?? true} onChange={e => setConfig({ ...config, showTaxTable: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        <input type="checkbox" checked={config.showTaxTable ?? true} onChange={e => setConfig({ ...config, showTaxTable: e.target.checked })} className="rounded border-gray-300 text-[#205f64] focus:ring-[#205f64]" />
                         Show Tax Breakdown Table
                     </label>
                      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                        <input type="checkbox" checked={config.showQRCode ?? true} onChange={e => setConfig({ ...config, showQRCode: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        <input type="checkbox" checked={config.showQRCode ?? true} onChange={e => setConfig({ ...config, showQRCode: e.target.checked })} className="rounded border-gray-300 text-[#205f64] focus:ring-[#205f64]" />
                         Show Payment QR Code
                     </label>
                     <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                        <input type="checkbox" checked={config.showReceiverSign ?? true} onChange={e => setConfig({ ...config, showReceiverSign: e.target.checked })} className="rounded border-gray-300 text-[#8EBF45] focus:ring-[#8EBF45]" />
+                        <input type="checkbox" checked={config.showReceiverSign ?? true} onChange={e => setConfig({ ...config, showReceiverSign: e.target.checked })} className="rounded border-gray-300 text-[#205f64] focus:ring-[#205f64]" />
                         Show Receiver's Signature
                     </label>
                 </div>
@@ -1326,7 +1585,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             <select className="text-xs p-1 border rounded max-w-[120px]" onChange={(e) => handleDropdownChange('issuer', e.target.value)}>
                                 <option value="">Load Profile</option>
                                 {companyProfiles.map(cp => <option key={cp.id} value={cp.name}>{cp.name}</option>)}
-                                <option value="ADD_NEW" className="font-bold text-[#658C3E]">+ Add New...</option>
+                                <option value="ADD_NEW" className="font-bold text-[#498e72]">+ Add New...</option>
                             </select>
                         </div>
                         <input className="w-full text-sm p-2 border rounded mb-2" placeholder="Company Name" value={doc.issuer_details.name || ''} onChange={e => updateParty('issuer', 'name', e.target.value)} />
@@ -1360,7 +1619,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                 <select className="text-xs p-1 border rounded max-w-[120px]" onChange={(e) => handleDropdownChange('supplier', e.target.value)}>
                                     <option value="">Load Profile</option>
                                     {companyProfiles.map(cp => <option key={cp.id} value={cp.name}>{cp.name}</option>)}
-                                    <option value="ADD_NEW" className="font-bold text-[#658C3E]">+ Add New...</option>
+                                    <option value="ADD_NEW" className="font-bold text-[#498e72]">+ Add New...</option>
                                 </select>
                             </div>
                             <input className="w-full text-sm p-2 border rounded mb-2" placeholder="Supplier Name" value={doc.supplier_details?.name || ''} onChange={e => updateParty('supplier', 'name', e.target.value)} />
@@ -1383,7 +1642,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             <select className="text-xs p-1 border rounded max-w-[120px]" onChange={(e) => handleDropdownChange('receiver', e.target.value)}>
                                 <option value="">Load Profile</option>
                                 {companyProfiles.map(cp => <option key={cp.id} value={cp.name}>{cp.name}</option>)}
-                                <option value="ADD_NEW" className="font-bold text-[#658C3E]">+ Add New...</option>
+                                <option value="ADD_NEW" className="font-bold text-[#498e72]">+ Add New...</option>
                             </select>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
@@ -1406,7 +1665,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                     <div className="bg-blue-50/50 p-3 rounded border">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-bold text-slate-700">Shipped To</h3>
-                            <button onClick={copyReceiverToShipped} className="text-[10px] bg-white border rounded px-2 py-0.5 text-slate-500 hover:text-[#658C3E] hover:border-[#8EBF45]">Copy from Billed To</button>
+                            <button onClick={copyReceiverToShipped} className="text-[10px] bg-white border rounded px-2 py-0.5 text-slate-500 hover:text-[#498e72] hover:border-[#205f64]">Copy from Billed To</button>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs text-slate-400">Label:</span>
@@ -1431,13 +1690,13 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 onClick={() => handleTaxModeChange(doc.invoice_metadata.tax_mode === 'intra' ? undefined : 'intra')}
-                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'intra' ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'intra' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'intra' ? 'bg-[#205f64] text-[#0D0D0D] border-[#205f64]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'intra' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                             >
                                 CGST + SGST (Intra)
                             </button>
                             <button
                                 onClick={() => handleTaxModeChange(doc.invoice_metadata.tax_mode === 'inter' ? undefined : 'inter')}
-                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'inter' ? 'bg-[#8EBF45] text-[#0D0D0D] border-[#8EBF45]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'inter' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                                className={`p-2 text-xs border rounded font-bold transition-all ${doc.invoice_metadata.tax_mode === 'inter' ? 'bg-[#205f64] text-[#0D0D0D] border-[#205f64]' : getTaxMode(doc.issuer_details.gstin, doc.receiver_details.gstin) === 'inter' && !doc.invoice_metadata.tax_mode ? 'bg-slate-200 text-slate-600 border-slate-300' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                             >
                                 IGST (Inter)
                             </button>
@@ -1448,18 +1707,79 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                     </div>
                 </div>
 
+                {doc.invoice_metadata?.edit_history && doc.invoice_metadata.edit_history.length > 0 && (
+                    <div className="mt-6 p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+                        <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                            <History size={15} className="text-amber-600" /> Revision & Edit History ({doc.invoice_metadata.edit_history.length})
+                        </h4>
+                        <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                            {doc.invoice_metadata.edit_history.map((entry, idx) => (
+                                <div key={idx} className="p-3 bg-white rounded-lg border border-amber-100 text-xs shadow-2xs space-y-1.5">
+                                    <div className="flex justify-between items-center font-bold text-slate-800">
+                                        <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[11px] font-black">{entry.edited_by || 'User'}</span>
+                                        <span className="text-[10px] text-slate-400 font-mono">{entry.edited_at ? new Date(entry.edited_at).toLocaleString('en-IN') : ''}</span>
+                                    </div>
+                                    <p className="text-xs font-semibold text-slate-700">{entry.summary || 'Document updated'}</p>
+                                    {entry.changes && entry.changes.length > 0 && (
+                                        <div className="mt-1 pt-1.5 border-t border-slate-100 space-y-1">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Detailed Changes:</span>
+                                            <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-600 font-medium">
+                                                {entry.changes.map((changeStr, cIdx) => (
+                                                    <li key={cIdx} className="leading-snug">{changeStr}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {entry.previous_grand_total !== undefined && (!entry.changes || entry.changes.length === 0) && (
+                                        <p className="text-[10px] text-slate-400 font-mono">Prev Total: â‚¹{Number(entry.previous_grand_total).toLocaleString('en-IN')}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="mt-8 pt-6 border-t flex flex-col gap-3 mb-10">
-                    <button
-                        onClick={handleSaveRecord}
-                        disabled={isSaving}
-                        className={`w-full ${isSaving ? 'bg-slate-400' : 'bg-[#8EBF45] hover:bg-[#658C3E] text-[#0D0D0D] hover:text-white'} py-2 rounded shadow flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide`}
-                    >
-                        {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                        {isSaving ? "Checking for duplicates..." : "Save Draft"}
-                    </button>
+                    {isEditingExistingRecord ? (
+                        <div className="space-y-2">
+                            {currentUser?.role === 'admin' ? (
+                                <button
+                                    onClick={handleUpdateRecord}
+                                    disabled={isSaving}
+                                    className={`w-full ${isSaving ? 'bg-amber-400' : 'bg-amber-500 hover:bg-amber-600 text-white'} py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2 text-sm font-black uppercase tracking-wide transition-all`}
+                                >
+                                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                                    {isSaving ? "Updating Record..." : "Update Existing Record"}
+                                </button>
+                            ) : (
+                                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-center text-xs font-semibold text-amber-800 flex items-center justify-center gap-1.5">
+                                    <span>ðŸ”’</span>
+                                    <span>Update existing record is restricted to Director Admins</span>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleSaveRecord}
+                                disabled={isSaving}
+                                className={`w-full ${isSaving ? 'bg-slate-300' : 'bg-slate-700 hover:bg-slate-800 text-white'} py-2 rounded shadow flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wide transition-all`}
+                            >
+                                {isSaving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                                Save as New Copy
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleSaveRecord}
+                            disabled={isSaving}
+                            className={`w-full ${isSaving ? 'bg-slate-400' : 'bg-[#205f64] hover:bg-[#498e72] text-[#0D0D0D] hover:text-white'} py-2 rounded shadow flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide`}
+                        >
+                            {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                            {isSaving ? "Checking for duplicates..." : "Save Draft"}
+                        </button>
+                    )}
                     <div className="flex gap-2">
                         <button onClick={handlePrint} className="flex-1 bg-[#0D0D0D] text-white py-2 rounded shadow hover:bg-[#404040] flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide"><Printer size={16} /> Print</button>
-                        <button onClick={handlePrint} className="flex-1 bg-[#8EBF45] text-[#0D0D0D] py-2 rounded shadow hover:bg-[#658C3E] hover:text-white flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide"><Download size={16} /> PDF</button>
+                        <button onClick={handlePrint} className="flex-1 bg-[#205f64] text-[#0D0D0D] py-2 rounded shadow hover:bg-[#498e72] hover:text-white flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide"><Download size={16} /> PDF</button>
                     </div>
                     {!initialData?.id && (
                         <button onClick={() => { if(confirm('Are you sure you want to clear your current draft?')) { try { localStorage.removeItem('invoice_maker_draft'); window.location.reload(); } catch(e){} } }} className="w-full text-xs text-red-500 hover:text-red-600 mt-2 font-bold underline underline-offset-2">
@@ -1470,13 +1790,13 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                         <span className="text-xs text-slate-500 font-semibold">Copies:</span>
                         <button
                             onClick={() => setPrintMode('single')}
-                            className={`text-xs px-3 py-1 rounded-full border transition-all ${printMode === 'single' ? 'bg-[#8EBF45]/20 text-[#658C3E] border-[#8EBF45] font-bold' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all ${printMode === 'single' ? 'bg-[#205f64]/20 text-[#498e72] border-[#205f64] font-bold' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
                         >
                             Single Copy
                         </button>
                         <button
                             onClick={() => setPrintMode('dual')}
-                            className={`text-xs px-3 py-1 rounded-full border transition-all ${printMode === 'dual' ? 'bg-[#8EBF45]/20 text-[#658C3E] border-[#8EBF45] font-bold' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                            className={`text-xs px-3 py-1 rounded-full border transition-all ${printMode === 'dual' ? 'bg-[#205f64]/20 text-[#498e72] border-[#205f64] font-bold' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
                         >
                             Dual (Original + Duplicate)
                         </button>
@@ -1510,13 +1830,13 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                     <div className="flex items-center justify-end gap-1">
                                         <span className="font-semibold text-sm">No:</span>
                                         <div className="relative group">
-                                            <input className="text-right border-b border-transparent hover:border-slate-300 focus:border-[#8EBF45] outline-none w-36 bg-transparent text-sm font-mono" value={doc.invoice_metadata.invoice_number} onChange={(e) => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, invoice_number: e.target.value } }))} />
+                                            <input className="text-right border-b border-transparent hover:border-slate-300 focus:border-[#205f64] outline-none w-36 bg-transparent text-sm font-mono" value={doc.invoice_metadata.invoice_number} onChange={(e) => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, invoice_number: e.target.value } }))} />
                                             <button onClick={generateInvoiceNumber} className="absolute -right-6 top-0 opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 p-0.5" title="Auto-Generate FY Number"><RefreshCw size={12} /></button>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-end gap-0.5">
                                         <span className="font-semibold text-sm">Date:</span>
-                                        <input type="date" className="print-date-input text-right border-b border-transparent hover:border-slate-300 focus:border-[#8EBF45] outline-none w-28 bg-transparent text-sm" value={doc.invoice_metadata.invoice_date} onChange={(e) => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, invoice_date: e.target.value } }))} />
+                                        <input type="date" className="print-date-input text-right border-b border-transparent hover:border-slate-300 focus:border-[#205f64] outline-none w-28 bg-transparent text-sm" value={doc.invoice_metadata.invoice_date} onChange={(e) => setDoc(prev => ({ ...prev, invoice_metadata: { ...prev.invoice_metadata, invoice_date: e.target.value } }))} />
                                         <span className="print-date-text text-sm" style={{ display: 'none' }}>{doc.invoice_metadata.invoice_date ? new Date(doc.invoice_metadata.invoice_date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}</span>
                                     </div>
                                 </div>
@@ -1581,9 +1901,9 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-2 no-print">
-                            <div className="flex gap-2">
-                                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-600 border border-slate-200"><Columns size={12} /> Columns</button>
+                        <div className="flex flex-wrap justify-between items-center mb-2 no-print gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors flex items-center gap-1"><Columns size={12} /> Columns</button>
                                 {showColumnMenu && (
                                     <div className="absolute top-64 left-16 bg-white shadow-xl border rounded p-3 w-48 z-20 grid grid-cols-2 gap-2">
                                         <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={visibleColumns.index} onChange={e => setVisibleColumns({ ...visibleColumns, index: e.target.checked })} /> No #</label>
@@ -1597,10 +1917,49 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                         <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={visibleColumns.total} onChange={e => setVisibleColumns({ ...visibleColumns, total: e.target.checked })} /> Total</label>
                                     </div>
                                 )}
-                                <button onClick={() => itemFileInputRef.current?.click()} className="text-xs bg-[#A8BF75]/20 text-[#658C3E] px-3 py-1 rounded-full border border-[#A8BF75]/50 flex items-center gap-1 hover:bg-[#A8BF75]/30"><ImportIcon size={12} /> Import Table</button>
-                                <input type="file" ref={itemFileInputRef} className="hidden" accept=".csv" onChange={handleItemImport} />
+                                <input type="file" ref={itemFileInputRef} className="hidden" accept=".csv,text/csv" onChange={handleItemImport} />
                             </div>
-                            <button onClick={addItem} className="text-xs text-[#658C3E] flex items-center gap-1"><Plus size={12} /> Add Line</button>
+                            <button onClick={addItem} className="text-xs text-[#498e72] flex items-center gap-1 font-semibold hover:underline"><Plus size={12} /> Add Line</button>
+                        </div>
+
+                        {/* UNIFORM CSV CONTROL BAR */}
+                        <div className="mb-4 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
+                            <div className="flex items-start gap-3">
+                                <span className="text-xl">ðŸ“„</span>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
+                                    </div>
+                                    <p className="text-[11px] font-mono text-slate-300 mt-1 leading-relaxed flex flex-wrap gap-1.5 items-center">
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Description</span>
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">HSN/SAC</span>
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Quantity</span>
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Unit Price</span>
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Discount</span>
+                                        <span className="bg-slate-800 text-emerald-400 border border-slate-700 px-2 py-0.5 rounded font-bold">Tax Rate %</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 self-end md:self-auto shrink-0">
+                                <button
+                                    onClick={downloadItemCSVTemplate}
+                                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                                    title="Download sample CSV template for invoice items"
+                                >
+                                    <Download size={14} />
+                                    <span>Download Template CSV</span>
+                                </button>
+
+                                <button
+                                    onClick={() => itemFileInputRef.current?.click()}
+                                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5"
+                                    title="Import line items from CSV file"
+                                >
+                                    <ImportIcon size={14} />
+                                    <span>Import CSV</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div className="mb-4">
@@ -1643,7 +2002,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                             <div className="mt-1 relative">
                                                                 <input 
                                                                     autoFocus 
-                                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs outline-none focus:border-[#8EBF45] shadow-sm" 
+                                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs outline-none focus:border-[#205f64] shadow-sm" 
                                                                     placeholder="Search S/N..." 
                                                                     value={serialSearchTerm} 
                                                                     onChange={e => setSerialSearchTerm(e.target.value)} 
@@ -1654,7 +2013,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                                             .filter(s => s.id.toLowerCase().includes(serialSearchTerm.toLowerCase()) || s.name.toLowerCase().includes(serialSearchTerm.toLowerCase()))
                                                                             .slice(0, 15)
                                                                             .map(s => (
-                                                                                <div key={s.id} className="px-3 py-2 hover:bg-[#8EBF45]/10 cursor-pointer text-xs border-b border-slate-50 last:border-0 transition-colors" onClick={() => handleAddSerial(idx, s.id)}>
+                                                                                <div key={s.id} className="px-3 py-2 hover:bg-[#205f64]/10 cursor-pointer text-xs border-b border-slate-50 last:border-0 transition-colors" onClick={() => handleAddSerial(idx, s.id)}>
                                                                                     <div className="font-mono text-slate-800 font-bold">{s.id}</div>
                                                                                     <div className="text-slate-500 font-medium truncate">{s.name} {s.details && <span className="text-slate-400 bg-slate-100 px-1 rounded ml-1">{s.details}</span>}</div>
                                                                                 </div>
@@ -1671,7 +2030,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                             <button
                                                                 key={p.id}
                                                                 onMouseDown={(e) => { e.preventDefault(); handlePriceSelect(idx, p); }}
-                                                                className="w-full text-left px-3 py-2 hover:bg-[#8EBF45]/10 flex justify-between items-center text-sm border-b border-slate-50 last:border-0 transition-colors"
+                                                                className="w-full text-left px-3 py-2 hover:bg-[#205f64]/10 flex justify-between items-center text-sm border-b border-slate-50 last:border-0 transition-colors"
                                                             >
                                                                 <span className="font-medium text-slate-800 truncate mr-2">{p.model_name}</span>
                                                                 <span className="flex items-center gap-2">
@@ -1689,7 +2048,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                     <input className="w-full bg-transparent outline-none text-[10px] text-blue-600 no-print" value={item.image_url || ''} onChange={e => updateItem(idx, 'image_url', e.target.value)} placeholder="Paste image URL" />
                                                 </div>
                                             </td>}
-                                            {visibleColumns.hsn && <td className="py-2"><input className="w-full bg-transparent outline-none text-slate-600 text-xs" value={item.hsn_sac || ''} onChange={e => updateItem(idx, 'hsn_sac', e.target.value)} placeholder="—" /></td>}
+                                            {visibleColumns.hsn && <td className="py-2"><input className="w-full bg-transparent outline-none text-slate-600 text-xs" value={item.hsn_sac || ''} onChange={e => updateItem(idx, 'hsn_sac', e.target.value)} placeholder="â€”" /></td>}
                                             {visibleColumns.quantity && <td className="py-2 text-right"><input className="w-full bg-transparent outline-none text-right" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} /></td>}
                                             {visibleColumns.rate && <td className="py-2 text-right"><input className="w-full bg-transparent outline-none text-right" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', e.target.value)} /></td>}
                                             {visibleColumns.discount && <td className="py-2 text-right"><input className="w-full bg-transparent outline-none text-right" value={item.discount || 0} onChange={e => updateItem(idx, 'discount', e.target.value)} /></td>}
@@ -1750,7 +2109,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                     <td className="py-1.5 px-2 text-right">{g.taxableValue.toFixed(2)}</td>
                                                     <td className="py-1.5 px-1 text-center">
                                                         <input
-                                                            className="w-full bg-transparent outline-none text-sm text-center border-b border-transparent hover:border-slate-300 focus:border-[#8EBF45] font-medium px-1"
+                                                            className="w-full bg-transparent outline-none text-sm text-center border-b border-transparent hover:border-slate-300 focus:border-[#205f64] font-medium px-1"
                                                             type="number"
                                                             min="0"
                                                             step="0.5"
@@ -1963,7 +2322,7 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
                                                             {visibleColumns.index && <td className="py-1.5 pl-2 text-slate-400">{globalIdx + 1}</td>}
                                                             {visibleColumns.description && <td className="py-1.5 font-medium text-slate-800">{safeRender(item.description)}</td>}
                                                             {(visibleColumns as any).image && <td className="py-1.5 text-center">{item.image_url && <img src={item.image_url} alt="" className="w-10 h-10 object-contain rounded inline-block" />}</td>}
-                                                            {visibleColumns.hsn && <td className="py-1.5 text-slate-600 text-xs">{item.hsn_sac || '—'}</td>}
+                                                            {visibleColumns.hsn && <td className="py-1.5 text-slate-600 text-xs">{item.hsn_sac || 'â€”'}</td>}
                                                             {visibleColumns.quantity && <td className="py-1.5 text-right">{item.quantity}</td>}
                                                             {visibleColumns.rate && <td className="py-1.5 text-right">{item.unit_price}</td>}
                                                             {visibleColumns.discount && <td className="py-1.5 text-right">{item.discount || 0}</td>}
@@ -2109,16 +2468,28 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
             </div>
             {/* Add Company Modal with Iframe */}
             {isAddCompanyModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
-                        <div className="flex justify-between items-center p-4 border-b">
-                            <h2 className="text-lg font-bold text-slate-800">Add New Company Profile</h2>
-                            <button onClick={() => setIsAddCompanyModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2">✕</button>
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setIsAddCompanyModalOpen(false)}
+                >
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] max-h-[600px] flex flex-col overflow-hidden border border-slate-200 text-left"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center px-4 py-3 border-b bg-slate-50 shrink-0">
+                            <h2 className="text-base sm:text-lg font-bold text-slate-800">Add New Company Profile</h2>
+                            <button 
+                                onClick={() => setIsAddCompanyModalOpen(false)} 
+                                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-lg font-bold"
+                                title="Close"
+                            >
+                                âœ•
+                            </button>
                         </div>
-                        <div className="flex-1 min-h-[600px] h-[75vh]">
+                        <div className="flex-1 w-full h-full min-h-0 bg-white">
                             <iframe 
                                 src="/?mode=add_company" 
-                                className="w-full h-full border-none"
+                                className="w-full h-full border-none block"
                                 title="Add Company"
                             />
                         </div>
@@ -2138,3 +2509,4 @@ const InvoiceMaker: React.FC<InvoiceMakerProps> = ({ currentUser, username, comp
 };
 
 export default InvoiceMaker;
+
