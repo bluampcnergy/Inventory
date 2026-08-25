@@ -231,7 +231,7 @@ const CompanyProfiles: React.FC<CompanyProfilesProps> = ({ companyProfiles, setC
             {/* UNIFORM CSV CONTROL BAR */}
             <div className="mb-6 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
                 <div className="flex items-start gap-3">
-                    <span className="text-xl">ðŸ“„</span>
+                    <span className="text-xl">📄</span>
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
@@ -253,7 +253,7 @@ const CompanyProfiles: React.FC<CompanyProfilesProps> = ({ companyProfiles, setC
                         className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                         title="Download sample CSV template with proper headers"
                     >
-                        <span>ðŸ’¾ Download Template CSV</span>
+                        <span>💾 Download Template CSV</span>
                     </button>
 
                     <button
@@ -345,4 +345,3 @@ const CompanyProfiles: React.FC<CompanyProfilesProps> = ({ companyProfiles, setC
 };
 
 export default CompanyProfiles;
-

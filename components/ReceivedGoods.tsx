@@ -31,11 +31,21 @@ interface ReceivedGoodsProps {
     setInvoiceDraft?: (draft: ExtractedInvoice) => void;
 }
 
-const statusInfo = {
+const statusInfo: Record<string, { text: string; color: string }> = {
     [ReceivedGoodStatus.ND]: { text: 'Not Damaged', color: 'bg-[#75c081]/20 text-[#498e72] border border-[#75c081]/50' },
     [ReceivedGoodStatus.PR]: { text: 'Partially Received', color: 'bg-yellow-50 text-yellow-800 border border-yellow-200' },
     [ReceivedGoodStatus.D]: { text: 'Damaged', color: 'bg-red-50 text-red-800 border border-red-200' },
     [ReceivedGoodStatus.Other]: { text: 'Other', color: 'bg-gray-100 text-gray-800 border border-gray-200' },
+    'Not Damaged': { text: 'Not Damaged', color: 'bg-[#75c081]/20 text-[#498e72] border border-[#75c081]/50' },
+    'Partially Received': { text: 'Partially Received', color: 'bg-yellow-50 text-yellow-800 border border-yellow-200' },
+    'Damaged': { text: 'Damaged', color: 'bg-red-50 text-red-800 border border-red-200' },
+    'received': { text: 'Received', color: 'bg-[#75c081]/20 text-[#498e72] border border-[#75c081]/50' },
+    'Received': { text: 'Received', color: 'bg-[#75c081]/20 text-[#498e72] border border-[#75c081]/50' },
+};
+
+const getStatusBadge = (status?: string) => {
+    if (!status) return statusInfo[ReceivedGoodStatus.ND];
+    return statusInfo[status] || statusInfo[status.toUpperCase()] || { text: status, color: 'bg-slate-100 text-slate-700 border border-slate-200' };
 };
 
 const initialFormState: Omit<ReceivedGood, 'id' | 'timestamp' | 'serials'> & { serials: string[] } = {
@@ -407,7 +417,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             serialIndexMap: isCell ? serialIndexMap : undefined
         };
 
-        // Prepare Test Results (Only for Cells) â€” now includes grade/location for round-tripping
+        // Prepare Test Results (Only for Cells) — now includes grade/location for round-tripping
         const newTestResults: TestResult[] = [];
         if (isCell) {
             serialEntries.forEach(entry => {
@@ -436,18 +446,18 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
         if (editingGood) {
             // DATA SAFETY #2: Check for removed serials BEFORE any state changes
-            // Cancel aborts the entire save â€” no changes made at all
+            // Cancel aborts the entire save — no changes made at all
             const removedSerials = isCell ? editingGood.serials.filter(s => !validSerials.includes(s)) : [];
             let shouldDeleteOrphans = false;
             if (removedSerials.length > 0) {
                 const orphanedResults = testResults.filter(r => r.receivedGoodId === goodId && removedSerials.includes(r.serialNumber));
                 if (orphanedResults.length > 0) {
                     const confirmRemove = window.confirm(
-                        `âš ï¸ You removed ${removedSerials.length} serial(s) from this batch.\n\n` +
+                        `⚠️ You removed ${removedSerials.length} serial(s) from this batch.\n\n` +
                         `${orphanedResults.length} test result(s) with grading data exist for these serials.\n` +
                         `Click OK to proceed and delete orphaned test data, or Cancel to abort save.`
                     );
-                    if (!confirmRemove) return; // Cancel â†’ abort the entire save, NO changes made
+                    if (!confirmRemove) return; // Cancel → abort the entire save, NO changes made
                     shouldDeleteOrphans = true;
                 }
             }
@@ -492,7 +502,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     updated = updated.filter(r => !(r.receivedGoodId === goodId && orphanSet.has(r.serialNumber)));
                 }
 
-                // Standard merge path â€” preserve existing fields not in the grid
+                // Standard merge path — preserve existing fields not in the grid
                 newTestResults.forEach(newResult => {
                     const idx = updated.findIndex(r => r.id === newResult.id);
                     if (idx > -1) {
@@ -520,7 +530,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             const testedCount = affectedResults.filter(r => r.voltage || r.resistance || r.capacity || r.grade).length;
 
             const message = testedCount > 0
-                ? `Delete "${editingGood.name}"?\n\nâš ï¸ This will permanently destroy ${affectedResults.length} test result(s), including ${testedCount} with grading/test data.\n\nThis action cannot be undone.`
+                ? `Delete "${editingGood.name}"?\n\n⚠️ This will permanently destroy ${affectedResults.length} test result(s), including ${testedCount} with grading/test data.\n\nThis action cannot be undone.`
                 : `Delete "${editingGood.name}"?`;
 
             if (confirm(message)) {
@@ -534,7 +544,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 
     // CSV EXPORT: Export all inventory data with test results
     const handleExportCsv = () => {
-        const headers = ['Name', 'Category', 'Make/Model', 'Supplier', 'Invoice #', 'Quantity', 'UOM', 'Status', 'Date', 'Serial Number', '#', 'Voltage', 'Resistance (mÎ©)', 'Capacity (Ah)', 'Grade', 'Location', 'Notes'];
+        const headers = ['Name', 'Category', 'Make/Model', 'Supplier', 'Invoice #', 'Quantity', 'UOM', 'Status', 'Date', 'Serial Number', '#', 'Voltage', 'Resistance (mΩ)', 'Capacity (Ah)', 'Grade', 'Location', 'Notes'];
         const rows: string[][] = [];
 
         receivedGoods.forEach(good => {
@@ -771,7 +781,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
             {/* UNIFORM CSV CONTROL BAR */}
             <div className="mb-6 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
                 <div className="flex items-start gap-3">
-                    <span className="text-xl">ðŸ“„</span>
+                    <span className="text-xl">📄</span>
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
@@ -807,7 +817,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                         className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                         title="Download sample CSV template with proper headers"
                     >
-                        <span>ðŸ’¾ Download Template CSV</span>
+                        <span>💾 Download Template CSV</span>
                     </button>
 
                     <button
@@ -815,7 +825,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                         className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5"
                         title="Import inventory stock from CSV file"
                     >
-                        <span>ðŸ“¥ Import CSV</span>
+                        <span>📥 Import CSV</span>
                     </button>
                 </div>
             </div>
@@ -855,19 +865,19 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                     onClick={() => setFilterNotes(!filterNotes)}
                     className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterNotes ? 'bg-amber-400 text-amber-900 border-amber-400 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    ðŸ“ Has Notes
+                    📝 Has Notes
                 </button>
                 <button
                     onClick={() => setFilterLowStock(!filterLowStock)}
                     className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterLowStock ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-black' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    âš ï¸ Low Stock Alerts
+                    ⚠️ Low Stock Alerts
                 </button>
                 <button
                     onClick={() => setFilterIgnored(!filterIgnored)}
                     className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all flex items-center gap-1.5 ${filterIgnored ? 'bg-slate-800 text-amber-300 border-slate-800 shadow-sm font-black' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                 >
-                    ðŸ”• Ignored Items
+                    🔕 Ignored Items
                 </button>
             </div>
 
@@ -888,8 +898,8 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                        <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${statusInfo[good.status].color}`}>
-                                            {statusInfo[good.status].text}
+                                        <div className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${getStatusBadge(good.status).color}`}>
+                                            {getStatusBadge(good.status).text}
                                         </div>
                                         <div className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-slate-100 text-slate-700 border border-slate-200">
                                             Unit: {good.uom || 'qty'}
@@ -897,7 +907,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                     </div>
                                     {good.isIgnoredForAlerts ? (
                                         <div className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border border-slate-300 bg-slate-100 text-slate-600 w-fit">
-                                            ðŸš« DO NOT REPLENISH
+                                            🚫 DO NOT REPLENISH
                                         </div>
                                     ) : stockAlert.isLowStock && (
                                         <div className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md border w-fit ${
@@ -905,7 +915,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                                 ? 'bg-rose-100 text-rose-800 border-rose-200' 
                                                 : 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                         }`}>
-                                            {stockAlert.isOutOfStock ? 'ðŸš« OUT OF STOCK' : `âš ï¸ LOW STOCK (${stockAlert.thresholdPercent}%)`}
+                                            {stockAlert.isOutOfStock ? '🚫 OUT OF STOCK' : `⚠️ LOW STOCK (${stockAlert.thresholdPercent}%)`}
                                         </div>
                                     )}
                                 </div>
@@ -918,7 +928,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                             }`}
                                         title="Open note"
                                     >
-                                        ðŸ“
+                                        📝
                                         {good.notes && good.notes !== 'actual physical qty = ' && (
                                             <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full"></span>
                                         )}
@@ -932,8 +942,8 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                 <div className="absolute top-12 right-4 z-50 w-64 animate-in" style={{ animation: 'fadeIn 0.15s ease-out' }}>
                                     <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ðŸ“Œ Note</span>
-                                            <button onClick={() => setOpenNoteId(null)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">âœ•</button>
+                                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
+                                            <button onClick={() => setOpenNoteId(null)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
                                         </div>
                                         <textarea
                                             className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
@@ -999,7 +1009,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                         }`}
                                         title={good.isIgnoredForAlerts ? "Click to re-enable low stock alerts" : "Click to ignore / mark as do not replenish"}
                                     >
-                                        {good.isIgnoredForAlerts ? 'ðŸš« Ignored' : 'ðŸ”” Alert On'}
+                                        {good.isIgnoredForAlerts ? '🚫 Ignored' : '🔔 Alert On'}
                                     </button>
                                     <button onClick={() => handleEditClick(good)} className="p-2.5 text-slate-400 hover:text-[#205f64] hover:bg-[#205f64]/5 rounded-xl transition-all"><PencilIcon /></button>
                                 </div>
@@ -1136,7 +1146,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                     className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
                                 />
                                 <span className="text-xs font-bold text-slate-800">
-                                    ðŸš« Do Not Replenish / Disable Stock Alerts
+                                    🚫 Do Not Replenish / Disable Stock Alerts
                                 </span>
                             </label>
                             {formData.isIgnoredForAlerts && (
@@ -1179,7 +1189,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                             <th className="p-2 border-b w-8">#</th>
                                             <th className="p-2 border-b">Serial Number</th>
                                             <th className="p-2 border-b w-24">Voltage (V)</th>
-                                            <th className="p-2 border-b w-24">Res (mÎ©)</th>
+                                            <th className="p-2 border-b w-24">Res (mΩ)</th>
                                             <th className="p-2 border-b w-24">Cap (Ah)</th>
                                         </tr>
                                     </thead>
@@ -1276,7 +1286,7 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
                                 className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-lg font-bold"
                                 title="Close"
                             >
-                                âœ•
+                                ✕
                             </button>
                         </div>
                         <div className="flex-1 w-full h-full min-h-0 bg-white">
@@ -1294,4 +1304,3 @@ const ReceivedGoods: React.FC<ReceivedGoodsProps> = ({
 };
 
 export default ReceivedGoods;
-

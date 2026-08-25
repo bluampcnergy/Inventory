@@ -111,14 +111,14 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
       });
       const data = await res.json();
       if (data.success && !data.warning) {
-        setSlackStatusMsg('âœ… Daily tasks posted to Slack successfully!');
+        setSlackStatusMsg('✅ Daily tasks posted to Slack successfully!');
       } else if (data.warning) {
-        setSlackStatusMsg(`âš ï¸ ${data.warning}`);
+        setSlackStatusMsg(`⚠️ ${data.warning}`);
       } else {
-        setSlackStatusMsg(`âŒ Error: ${data.error || 'Failed to send to Slack'}`);
+        setSlackStatusMsg(`❌ Error: ${data.error || 'Failed to send to Slack'}`);
       }
     } catch (err: any) {
-      setSlackStatusMsg(`âŒ Connection Error: ${err.message}`);
+      setSlackStatusMsg(`❌ Connection Error: ${err.message}`);
     } finally {
       setIsBroadcastingSlack(false);
       setTimeout(() => setSlackStatusMsg(null), 6000);
@@ -180,7 +180,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
       year: 'numeric'
     });
 
-    let text = `ðŸ“‹ *DATLION CNERGY â€” TASK ASSIGNMENTS*\nðŸ“… *Date:* ${dateStr}\n\n`;
+    let text = `📋 *DATLION CNERGY — TASK ASSIGNMENTS*\n📅 *Date:* ${dateStr}\n\n`;
 
     const targetEmps = employeeList.filter(e => waSelectedEmployees.includes(e.username));
     let totalIncludedTasks = 0;
@@ -194,22 +194,22 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
       if (empTasks.length === 0) return;
 
       const pendingCount = empTasks.filter(t => !t.completed).length;
-      text += `ðŸ‘¤ *Employee: ${emp.username}* (${pendingCount} pending)\n`;
+      text += `👤 *Employee: ${emp.username}* (${pendingCount} pending)\n`;
 
       empTasks.forEach(t => {
         totalIncludedTasks++;
         const badge = getDueDateBadgeInfo(t.due_date);
-        let statusEmoji = 'â€¢ ðŸ“Œ';
+        let statusEmoji = '• 📌';
         let dueText = '';
 
         if (t.completed) {
-          statusEmoji = 'â€¢ âœ…';
+          statusEmoji = '• ✅';
           dueText = ' (Completed)';
         } else if (badge?.isOverdue) {
-          statusEmoji = 'â€¢ ðŸš¨';
-          dueText = ` â€” *OVERDUE (${t.due_date})*`;
+          statusEmoji = '• 🚨';
+          dueText = ` — *OVERDUE (${t.due_date})*`;
         } else if (t.due_date) {
-          dueText = ` â€” Due: ${t.due_date}`;
+          dueText = ` — Due: ${t.due_date}`;
         }
 
         text += `${statusEmoji} *${t.title}*${dueText}\n`;
@@ -222,10 +222,10 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
     });
 
     if (totalIncludedTasks === 0) {
-      return `ðŸ“‹ *DATLION CNERGY â€” TASK ASSIGNMENTS*\nðŸ“… *Date:* ${dateStr}\n\nâš ï¸ No tasks selected for formatting. Please select employees and tasks on the left.`;
+      return `📋 *DATLION CNERGY — TASK ASSIGNMENTS*\n📅 *Date:* ${dateStr}\n\n⚠️ No tasks selected for formatting. Please select employees and tasks on the left.`;
     }
 
-    text += `ðŸ‘‰ _Please acknowledge and complete your assigned daily tasks._`;
+    text += `👉 _Please acknowledge and complete your assigned daily tasks._`;
     return text;
   }, [employeeList, validTasks, waSelectedEmployees, waSelectedTaskIds, waIncludeCompleted]);
 
@@ -313,7 +313,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-3 py-2 rounded-lg shadow-sm transition-all"
             title="Select tasks & employees to generate a formatted WhatsApp message"
           >
-            <span>ðŸ’¬ WhatsApp Format</span>
+            <span>💬 WhatsApp Format</span>
           </button>
           <button
             onClick={handleSendSlackDigest}
@@ -321,7 +321,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
             className="flex items-center gap-1.5 bg-[#4A154B] hover:bg-[#3F0E40] text-white text-xs font-extrabold px-3 py-2 rounded-lg shadow-sm transition-all disabled:opacity-50"
             title="Post 11:30 AM task digest to Slack immediately"
           >
-            {isBroadcastingSlack ? 'Sending...' : 'ðŸ“¢ Send Slack Digest'}
+            {isBroadcastingSlack ? 'Sending...' : '📢 Send Slack Digest'}
           </button>
         </div>
       </div>
@@ -359,7 +359,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-xs font-bold rounded-lg transition-colors shadow-2xs"
                     title={`Format tasks for ${employee.username} for WhatsApp`}
                   >
-                    <span>ðŸ’¬ WhatsApp</span>
+                    <span>💬 WhatsApp</span>
                   </button>
                   {isAdmin && (
                     <button
@@ -443,7 +443,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                                     task.completed ? 'bg-slate-100 text-slate-400 border border-slate-200' : badge.badgeClass
                                   }`}>
                                     <span className={`w-2 h-2 rounded-full ${task.completed ? 'bg-slate-300' : badge.dotColor}`}></span>
-                                    <span>ðŸ“… Due: <strong className="font-extrabold">{badge.dayOfWeek}</strong>, {badge.ddmmyy}</span>
+                                    <span>📅 Due: <strong className="font-extrabold">{badge.dayOfWeek}</strong>, {badge.ddmmyy}</span>
                                   </span>
                                 );
                               })()}
@@ -462,14 +462,14 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                               className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors text-xs"
                               title="Edit Task"
                             >
-                              âœï¸
+                              ✏️
                             </button>
                             <button
                               onClick={() => onDeleteTask(task.id)}
                               className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors text-xs"
                               title="Delete Task"
                             >
-                              ðŸ—‘ï¸
+                              🗑️
                             </button>
                           </div>
                         )}
@@ -492,7 +492,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                 <h3 className="text-base font-bold text-slate-900">Assign New Task</h3>
                 <p className="text-xs text-slate-500">Employee: <span className="font-bold text-slate-800">{addingTaskUser}</span></p>
               </div>
-              <button onClick={() => setAddingTaskUser(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm">âœ•</button>
+              <button onClick={() => setAddingTaskUser(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm">✕</button>
             </div>
 
             <form onSubmit={handleCreateTaskSubmit} className="space-y-4">
@@ -558,7 +558,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                 <h3 className="text-base font-bold text-slate-900">Edit Employee Task</h3>
                 <p className="text-xs text-slate-500">Assigned to: <span className="font-bold text-slate-800">{editingTask.assigned_to}</span></p>
               </div>
-              <button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm">âœ•</button>
+              <button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 font-bold text-sm">✕</button>
             </div>
 
             <form onSubmit={handleUpdateTaskSubmit} className="space-y-4">
@@ -623,7 +623,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
             <div className="bg-slate-900 text-white p-4 sm:p-5 flex justify-between items-center shrink-0 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold text-xl">
-                  ðŸ’¬
+                  💬
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-white tracking-wide">Format Tasks for WhatsApp</h3>
@@ -635,7 +635,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                 className="bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0"
                 title="Close Modal (Esc)"
               >
-                <span className="text-base leading-none">âœ•</span>
+                <span className="text-base leading-none">✕</span>
                 <span className="hidden sm:inline">Close</span>
               </button>
             </div>
@@ -740,7 +740,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                                     </p>
                                     {badge && !t.completed && (
                                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5 inline-block ${badge.badgeClass}`}>
-                                        {badge.isOverdue ? 'ðŸš¨ OVERDUE' : `ðŸ“… Due: ${badge.ddmmyy}`}
+                                        {badge.isOverdue ? '🚨 OVERDUE' : `📅 Due: ${badge.ddmmyy}`}
                                       </span>
                                     )}
                                   </div>
@@ -759,11 +759,11 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
               <div className="flex flex-col h-full bg-slate-900 rounded-xl p-4 text-slate-100 border border-slate-800 flex-1 min-h-0">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-3 shrink-0">
                   <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>ðŸ“± Live WhatsApp Preview</span>
+                    <span>📱 Live WhatsApp Preview</span>
                   </span>
                   {waCopied && (
                     <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded border border-emerald-800 animate-in fade-in">
-                      âœ“ Copied to Clipboard!
+                      ✓ Copied to Clipboard!
                     </span>
                   )}
                 </div>
@@ -788,7 +788,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                     onClick={handleCopyWAText}
                     className="flex-1 min-w-[110px] px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-extrabold rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
-                    <span>ðŸ“‹ Copy Text</span>
+                    <span>📋 Copy Text</span>
                   </button>
 
                   <button
@@ -796,7 +796,7 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
                     onClick={handleOpenWALink}
                     className="flex-1 min-w-[130px] px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                   >
-                    <span>ðŸ’¬ Open in WhatsApp</span>
+                    <span>💬 Open in WhatsApp</span>
                   </button>
                 </div>
               </div>
@@ -807,4 +807,3 @@ export const EmployeeTasks: React.FC<EmployeeTasksProps> = ({
     </div>
   );
 };
-

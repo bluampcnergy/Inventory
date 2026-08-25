@@ -545,7 +545,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
         const serialIdx = headers.findIndex(h => h.includes('serial') || h === 'sn' || h === 's/n' || h.includes('s_n'));
         const voltIdx = headers.findIndex(h => h.includes('voltage') || h.includes('volt') || h === 'v');
-        const resIdx = headers.findIndex(h => h.includes('resistance') || h.includes('res') || h.includes('ir') || h.includes('mÎ©') || h.includes('mohm'));
+        const resIdx = headers.findIndex(h => h.includes('resistance') || h.includes('res') || h.includes('ir') || h.includes('mΩ') || h.includes('mohm'));
         const capIdx = headers.findIndex(h => h.includes('capacity') || h.includes('cap') || h.includes('ah'));
         const gradeIdx = headers.findIndex(h => h.includes('grade'));
         const locIdx = headers.findIndex(h => h.includes('location') || h.includes('rack'));
@@ -712,7 +712,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
             {/* UNIFORM CSV CONTROL BAR */}
             <div className="mb-6 bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
                 <div className="flex items-start gap-3">
-                    <span className="text-xl">ðŸ“„</span>
+                    <span className="text-xl">📄</span>
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
@@ -741,7 +741,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                         className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                         title="Download sample CSV template with proper headers"
                     >
-                        <span>ðŸ’¾ Download Template CSV</span>
+                        <span>💾 Download Template CSV</span>
                     </button>
 
                     <button
@@ -828,7 +828,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 sticky top-0 bg-white z-10 gap-4">
                         <div>
-                            <button onClick={() => setSelectedBatch(null)} className="text-gray-500 hover:text-gray-700 text-sm mb-1">â† Back to Batches</button>
+                            <button onClick={() => setSelectedBatch(null)} className="text-gray-500 hover:text-gray-700 text-sm mb-1">← Back to Batches</button>
                             <h2 className="text-xl font-bold text-gray-800">{selectedBatch.name} <span className="text-gray-500 font-normal">({selectedBatch.category})</span></h2>
                             <p className="text-sm text-gray-500">Batch ID: {selectedBatch.id}</p>
                         </div>
@@ -862,7 +862,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                         }`}
                                     title="Open note"
                                 >
-                                    ðŸ“
+                                    📝
                                     {selectedBatch.notes && selectedBatch.notes !== 'actual physical qty = ' && (
                                         <span className="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>
                                     )}
@@ -871,8 +871,8 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                     <div className="absolute top-10 right-0 z-50 w-64" style={{ animation: 'fadeIn 0.15s ease-out' }}>
                                         <div className="bg-amber-50 border-2 border-amber-200 rounded-xl shadow-2xl p-4" style={{ boxShadow: '4px 4px 15px rgba(0,0,0,0.15)' }}>
                                             <div className="flex justify-between items-center mb-2">
-                                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">ðŸ“Œ Note</span>
-                                                <button onClick={() => setShowBatchNote(false)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">âœ•</button>
+                                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">📌 Note</span>
+                                                <button onClick={() => setShowBatchNote(false)} className="text-amber-400 hover:text-amber-600 text-xs font-bold p-1">✕</button>
                                             </div>
                                             <textarea
                                                 className="w-full bg-transparent border-none outline-none text-sm text-amber-900 resize-none placeholder-amber-300"
@@ -906,7 +906,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 
                     {isLoadingBatchData && (
                         <div className="mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg flex items-center justify-between text-xs font-bold animate-pulse">
-                            <span>ðŸ”„ Syncing full database testing data for all cells in this batch...</span>
+                            <span>🔄 Syncing full database testing data for all cells in this batch...</span>
                         </div>
                     )}
 
@@ -953,7 +953,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 onChange={e => setGradingConfig({ ...gradingConfig, mode: e.target.value as GradeMode })}
                                             >
                                                 <option value="capacity">Capacity (Ah)</option>
-                                                <option value="resistance">Resistance (mÎ©)</option>
+                                                <option value="resistance">Resistance (mΩ)</option>
                                                 <option value="voltage">Voltage (V)</option>
                                             </select>
                                         </div>
@@ -1028,7 +1028,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 className="p-3 border-b font-semibold text-gray-600 w-24 cursor-pointer hover:bg-gray-100 group select-none"
                                                 onClick={() => handleSort('resistance')}
                                             >
-                                                <div className="flex items-center gap-1">Res (mÎ©) {getSortIcon('resistance')}</div>
+                                                <div className="flex items-center gap-1">Res (mΩ) {getSortIcon('resistance')}</div>
                                             </th>
                                             <th
                                                 className="p-3 border-b font-semibold text-gray-600 w-24 cursor-pointer hover:bg-gray-100 group select-none"
@@ -1163,7 +1163,7 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
                                                 {isTested ? (
                                                     <CheckCircleIcon />
                                                 ) : (
-                                                    <span className="text-gray-300">â€¢</span>
+                                                    <span className="text-gray-300">•</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -1180,4 +1180,3 @@ const Testing: React.FC<TestingProps> = ({ receivedGoods, testResults, setTestRe
 };
 
 export default Testing;
-

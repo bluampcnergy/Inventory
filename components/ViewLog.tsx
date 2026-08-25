@@ -224,7 +224,7 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
             onClick={handleCopyDailyLog}
             className="bg-gray-800 text-white hover:bg-gray-900 px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-xs"
           >
-            {copyStatus ? 'âœ“ Copied!' : 'Copy Daily Log'}
+            {copyStatus ? '✓ Copied!' : 'Copy Daily Log'}
           </button>
         </div>
       </div>
@@ -233,7 +233,7 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-4">
         <div className="flex items-center justify-between border-b pb-2">
           <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-            ðŸ“… Manual Log Query by Date
+            📅 Manual Log Query by Date
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-gray-400 font-medium">Quick Presets:</span>
@@ -290,9 +290,9 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
             >
               {isLoading ? (
-                <span className="animate-spin text-sm">â³</span>
+                <span className="animate-spin text-sm">⏳</span>
               ) : (
-                <span>ðŸ”</span>
+                <span>🔍</span>
               )}
               {isLoading ? 'Querying...' : 'Load Logs by Date'}
             </button>
@@ -319,7 +319,7 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
       {/* Search Input */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-sm">
-          ðŸ”
+          🔍
         </div>
         <input
           type="text"
@@ -340,7 +340,7 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
           {filteredLogs.map(log => (
             <li key={log.id} className="p-4 flex items-start space-x-4 hover:bg-gray-50 transition-colors">
               <div className={`flex-shrink-0 p-2 rounded-full ${actionColors[log.action] || 'bg-gray-100 text-gray-800'}`}>
-                {actionIcons[log.action] || <div className="h-5 w-5 flex items-center justify-center font-bold text-xs">ðŸ“‹</div>}
+                {actionIcons[log.action] || <div className="h-5 w-5 flex items-center justify-center font-bold text-xs">📋</div>}
               </div>
               <div className="flex-grow">
                 <div className="flex justify-between items-baseline">
@@ -375,4 +375,3 @@ const ViewLog: React.FC<ViewLogProps> = ({ logs }) => {
 };
 
 export default ViewLog;
-

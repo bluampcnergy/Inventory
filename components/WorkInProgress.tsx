@@ -39,7 +39,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onC
                 <span className={selectedOption ? 'text-slate-800 font-medium' : 'text-slate-400'}>
                     {selectedOption ? selectedOption.label : placeholder || 'Select...'}
                 </span>
-                <span className="text-slate-400 text-xs">â–¼</span>
+                <span className="text-slate-400 text-xs">▼</span>
             </div>
 
             {isOpen && (
@@ -361,7 +361,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
             return {
                 id: name,
                 label: `${name}${makeDisplay}`,
-                subLabel: `${category} â€¢ Stock: ${totalStock} ${uom}`
+                subLabel: `${category} • Stock: ${totalStock} ${uom}`
             };
         });
     }, [receivedGoods]);
@@ -663,7 +663,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 
               <div style="margin-top: 30px; border-top: 2px dashed #0D0D0D; padding-top: 15px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #333; background: #fafafa; padding: 12px 16px; border-radius: 6px;">
                   <div>
-                      <div style="font-[#205f64]; font-weight: bold; font-size: 12px; margin-bottom: 4px; text-transform: uppercase;">âœ” Digital Signature & Authorization</div>
+                      <div style="font-[#205f64]; font-weight: bold; font-size: 12px; margin-bottom: 4px; text-transform: uppercase;">✔ Digital Signature & Authorization</div>
                       <div><strong>Authorized / Printed By:</strong> ${currentUser?.username || 'Authorized Operator'}</div>
                       <div><strong>Access Level:</strong> ${(currentUser?.role || 'Staff').toUpperCase()}</div>
                       <div><strong>Timestamp:</strong> ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
@@ -721,7 +721,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
         const isCrossSwap = originalGood && replacementGood && (originalGood.name.trim().toLowerCase() !== replacementGood.name.trim().toLowerCase());
 
         const swapLabel = isCrossSwap
-            ? `Cross-Swap (${originalGood?.name || 'Orig'} âž” ${replacementGood?.name || 'Replacement'})`
+            ? `Cross-Swap (${originalGood?.name || 'Orig'} ➔ ${replacementGood?.name || 'Replacement'})`
             : `Swap (${replacementGood?.name || 'Replacement'})`;
 
         if (!confirm(`Confirm ${swapLabel} of damaged unit ${damagedSerial} with ${replacementSerial}?`)) return;
@@ -1089,7 +1089,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                             {isRepair ? (
                                                 <span className="font-mono text-slate-500 font-bold">Repairing Unit: {item.unitId}</span>
                                             ) : (
-                                                recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>â€¢ {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)
+                                                recipe?.components.filter(c => c.masterItemName || c.receivedGoodId).map((c, i) => <div key={i}>• {c.masterItemName || (c.receivedGoodId ? getGoodName(c.receivedGoodId) : 'Item')} (x{c.quantityPerUnit})</div>)
                                             )}
                                         </td>
                                         <td className="p-4 text-sm text-gray-500">{new Date(item.timestamp).toLocaleDateString()}</td>
@@ -1199,7 +1199,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                         onClick={() => setSwapMode('category')}
                                         className={`flex-1 py-1.5 px-3 rounded-md transition-all ${swapMode === 'category' ? 'bg-[#205f64] text-[#0D0D0D] shadow-sm font-black' : 'text-slate-500 hover:text-slate-800'}`}
                                     >
-                                        âš¡ Cross Swap (Same Category: {category})
+                                        ⚡ Cross Swap (Same Category: {category})
                                     </button>
                                 </div>
                             );
@@ -1390,7 +1390,7 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
                                 ) : (
                                     <div className="bg-white p-2.5 rounded border border-slate-200 text-xs flex items-center justify-between mt-1">
                                         <span className="text-slate-600 font-medium italic">
-                                            Quantity-based item ({comp.uom}) â€” Stock will be deducted automatically upon confirmation.
+                                            Quantity-based item ({comp.uom}) — Stock will be deducted automatically upon confirmation.
                                         </span>
                                         <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${comp.totalAvailableCount >= comp.requiredSerialsCount ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                                             {comp.totalAvailableCount >= comp.requiredSerialsCount ? 'Stock Ready' : 'Insufficient Stock'}
@@ -1525,4 +1525,3 @@ const WorkInProgress: React.FC<WorkInProgressProps> = ({ wipItems, setWipItems, 
 };
 
 export default WorkInProgress;
-

@@ -79,7 +79,7 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
         }`}
       >
         <div className="flex items-center gap-2 overflow-hidden w-full">
-          <span className="text-slate-400 shrink-0 text-sm">ðŸ¢</span>
+          <span className="text-slate-400 shrink-0 text-sm">🏢</span>
           <input
             type="text"
             placeholder="Search & select supplier company..."
@@ -101,7 +101,7 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           {isDefaultSelected && (
             <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded border border-emerald-300 whitespace-nowrap">
-              âœ¨ Default
+              ✨ Default
             </span>
           )}
           {value && (
@@ -115,10 +115,10 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
               className="text-slate-400 hover:text-slate-700 p-0.5 text-xs font-bold transition-colors"
               title="Clear selection"
             >
-              âœ•
+              ✕
             </button>
           )}
-          <span className="text-slate-400 text-[10px] ml-0.5">â–¼</span>
+          <span className="text-slate-400 text-[10px] ml-0.5">▼</span>
         </div>
       </div>
 
@@ -163,17 +163,17 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
                       <span className="font-extrabold text-slate-900 text-xs">{comp.name}</span>
                       {isDefaultComp && (
                         <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.2 rounded border border-emerald-300">
-                          âœ¨ Default Registered
+                          ✨ Default Registered
                         </span>
                       )}
                     </div>
                     <div className="text-[10px] text-slate-500 font-medium flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      {comp.contactPerson && <span>ðŸ‘¤ {comp.contactPerson}</span>}
-                      {comp.email && <span>âœ‰ï¸ {comp.email}</span>}
-                      {comp.phoneNumber && <span>ðŸ“ž {comp.phoneNumber}</span>}
+                      {comp.contactPerson && <span>👤 {comp.contactPerson}</span>}
+                      {comp.email && <span>✉️ {comp.email}</span>}
+                      {comp.phoneNumber && <span>📞 {comp.phoneNumber}</span>}
                     </div>
                   </div>
-                  {isSelected && <span className="text-emerald-600 font-black text-xs">âœ“</span>}
+                  {isSelected && <span className="text-emerald-600 font-black text-xs">✓</span>}
                 </div>
               );
             })
@@ -192,7 +192,7 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
               }}
               className="p-2.5 hover:bg-slate-100 cursor-pointer text-xs font-bold text-slate-700 flex items-center gap-2 border-t"
             >
-              <span>âœï¸</span>
+              <span>✏️</span>
               <span>Use custom supplier name: <span className="text-slate-900 font-extrabold">"{searchQuery}"</span></span>
             </div>
           )}
@@ -205,7 +205,7 @@ const SearchableSupplierDropdown: React.FC<SearchableSupplierDropdownProps> = ({
             }}
             className="p-2.5 bg-slate-50 hover:bg-emerald-100/60 text-emerald-700 font-black text-xs cursor-pointer flex items-center justify-center gap-1.5 border-t sticky bottom-0"
           >
-            <span>âž•</span>
+            <span>➕</span>
             <span>+ Add New Supplier Profile...</span>
           </div>
         </div>
@@ -746,7 +746,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
     if (newRecords.length > 0) {
       setSuppliesRecords(prev => [...newRecords, ...prev]);
       addLogEntry('Imported Procurement CSV', `Imported ${newRecords.length} items into Procurement Dashboard.`);
-      alert(`âœ… Successfully imported ${newRecords.length} procurement items!`);
+      alert(`✅ Successfully imported ${newRecords.length} procurement items!`);
     } else {
       alert('Failed to parse any valid procurement items from the file.');
     }
@@ -1192,7 +1192,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <span>ðŸ“¦ Procurement & Requisitions</span>
+          <span>📦 Procurement & Requisitions</span>
         </button>
 
         <button
@@ -1203,7 +1203,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
           }`}
         >
-          <span>ðŸ” Find New Suppliers (AI & Maps)</span>
+          <span>🔍 Find New Suppliers (AI & Maps)</span>
         </button>
       </div>
 
@@ -1221,17 +1221,17 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
         <div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 text-xl font-bold">
-              ðŸ“¦
+              📦
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">Procurement & Supplies Dashboard</h1>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-300">
-                  âš¡ Database Synced
+                  ⚡ Database Synced
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Stock level alerts automatically flag items as <span className="font-bold text-amber-600">ðŸŸ¡ To Be Ordered</span> with ignore notification options.
+                Stock level alerts automatically flag items as <span className="font-bold text-amber-600">🟡 To Be Ordered</span> with ignore notification options.
               </p>
             </div>
           </div>
@@ -1280,7 +1280,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
       {/* UNIFORM CSV CONTROL BAR */}
       <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md no-print">
         <div className="flex items-start gap-3">
-          <span className="text-xl">ðŸ“„</span>
+          <span className="text-xl">📄</span>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Required CSV Headers:</span>
@@ -1306,7 +1306,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
             title="Download CSV sample template with proper headers"
           >
-            <span>ðŸ’¾ Download Template CSV</span>
+            <span>💾 Download Template CSV</span>
           </button>
 
           <button
@@ -1314,7 +1314,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-2xs whitespace-nowrap flex items-center gap-1.5"
             title="Import procurement items from CSV file"
           >
-            <span>ðŸ“¥ Import CSV</span>
+            <span>📥 Import CSV</span>
           </button>
         </div>
       </div>
@@ -1324,7 +1324,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/60 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl font-bold">
-              ðŸ§®
+              🧮
             </div>
             <div>
               <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
@@ -1376,7 +1376,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               onClick={() => handleCalculateSkuCapacity()}
               className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
             >
-              <span>ðŸ” Calculate Capacity</span>
+              <span>🔍 Calculate Capacity</span>
             </button>
 
             {calculatedResult && (
@@ -1398,7 +1398,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
           <div className="bg-slate-950/80 rounded-xl p-5 border border-slate-800 space-y-4 animate-in fade-in">
             {!calculatedResult.recipe ? (
               <div className="text-center py-6 space-y-2">
-                <span className="text-3xl">âš ï¸</span>
+                <span className="text-3xl">⚠️</span>
                 <h4 className="text-sm font-bold text-amber-400">No BOM Recipe Found for "{calculatedResult.skuName}"</h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
                   No registered product recipe matched this SKU name. Please select a registered SKU from the dropdown or register a recipe in the Master Data / WIP module.
@@ -1439,7 +1439,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                       <p className="text-3xl font-black text-emerald-400 tracking-tight">{calculatedResult.maxBuildable} <span className="text-xs text-slate-400 font-normal">units</span></p>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-2xl">
-                      âš¡
+                      ⚡
                     </div>
                   </div>
                 </div>
@@ -1448,13 +1448,13 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 {calculatedResult.bottleneck && (
                   <div className="bg-rose-950/40 border border-rose-800/60 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-200">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-xl">ðŸš¨</span>
+                      <span className="text-xl">🚨</span>
                       <div>
                         <p className="text-xs font-bold text-rose-300">
                           Limiting Factor (Bottleneck): <span className="font-extrabold text-white">{calculatedResult.bottleneck.name}</span>
                         </p>
                         <p className="text-[11px] text-rose-300/80">
-                          Stock available: {calculatedResult.bottleneck.availableStock} {calculatedResult.bottleneck.uom} | Requires {calculatedResult.bottleneck.requiredPerUnit} per unit â†’ Limits total build to {calculatedResult.maxBuildable} SKUs.
+                          Stock available: {calculatedResult.bottleneck.availableStock} {calculatedResult.bottleneck.uom} | Requires {calculatedResult.bottleneck.requiredPerUnit} per unit → Limits total build to {calculatedResult.maxBuildable} SKUs.
                         </p>
                       </div>
                     </div>
@@ -1502,7 +1502,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                       {calculatedResult.components.map((comp, idx) => (
                         <tr key={idx} className={comp.isBottleneck ? 'bg-rose-950/20 text-rose-100 font-semibold' : 'hover:bg-slate-900/40 text-slate-200'}>
                           <td className="py-2.5 px-3 flex items-center gap-2">
-                            {comp.isBottleneck && <span className="text-xs">ðŸ”´</span>}
+                            {comp.isBottleneck && <span className="text-xs">🔴</span>}
                             <span>{comp.name}</span>
                           </td>
                           <td className="py-2.5 px-3 text-slate-300">
@@ -1554,11 +1554,11 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-              <p className="text-[10px] font-black uppercase tracking-wider">ðŸŸ¡ To Be Ordered (Alerts)</p>
+              <p className="text-[10px] font-black uppercase tracking-wider">🟡 To Be Ordered (Alerts)</p>
             </div>
             <h3 className="text-2xl font-black mt-1">{counts.to_be_ordered}</h3>
           </div>
-          <span className="text-2xl">â³</span>
+          <span className="text-2xl">⏳</span>
         </div>
 
         {/* Ordered (Blue) */}
@@ -1573,11 +1573,11 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <p className="text-[10px] font-black uppercase tracking-wider">ðŸ”µ Ordered (In Transit)</p>
+              <p className="text-[10px] font-black uppercase tracking-wider">🔵 Ordered (In Transit)</p>
             </div>
             <h3 className="text-2xl font-black mt-1">{counts.ordered}</h3>
           </div>
-          <span className="text-2xl">ðŸšš</span>
+          <span className="text-2xl">🚚</span>
         </div>
 
         {/* Delivered (Green) */}
@@ -1592,11 +1592,11 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <p className="text-[10px] font-black uppercase tracking-wider">ðŸŸ¢ Delivered (In Stock)</p>
+              <p className="text-[10px] font-black uppercase tracking-wider">🟢 Delivered (In Stock)</p>
             </div>
             <h3 className="text-2xl font-black mt-1">{counts.delivered}</h3>
           </div>
-          <span className="text-2xl">âœ…</span>
+          <span className="text-2xl">✅</span>
         </div>
 
         {/* Total Items Tab */}
@@ -1612,7 +1612,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
             <p className={`text-[10px] font-black uppercase tracking-wider ${activeStatusFilter === 'all' ? 'text-slate-400' : 'text-slate-400'}`}>All Procurement Records</p>
             <h3 className="text-2xl font-black mt-1">{counts.total}</h3>
           </div>
-          <span className="text-2xl">ðŸ“‹</span>
+          <span className="text-2xl">📋</span>
         </div>
       </div>
 
@@ -1620,13 +1620,13 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
       {counts.stock_alerts > 0 && (
         <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-950 animate-in fade-in">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">ðŸš¨</span>
+            <span className="text-2xl">🚨</span>
             <div>
               <p className="text-xs font-black">
                 {counts.stock_alerts} Raw Material item(s) running low or out of stock!
               </p>
               <p className="text-[11px] text-amber-800 font-medium">
-                These items are automatically queued under <span className="font-bold">ðŸŸ¡ To Be Ordered</span>. You can suppress alerts anytime using the <span className="font-bold">ðŸš« Ignore</span> button on any card.
+                These items are automatically queued under <span className="font-bold">🟡 To Be Ordered</span>. You can suppress alerts anytime using the <span className="font-bold">🚫 Ignore</span> button on any card.
               </p>
             </div>
           </div>
@@ -1654,7 +1654,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 text-xs hover:text-slate-700">âœ•</button>
+              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-slate-400 text-xs hover:text-slate-700">✕</button>
             )}
           </div>
 
@@ -1676,7 +1676,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-all border border-slate-200 flex items-center gap-1 shrink-0 whitespace-nowrap"
               title="Clear supplier filter"
             >
-              <span>âœ• Clear Supplier Filter</span>
+              <span>✕ Clear Supplier Filter</span>
             </button>
           )}
         </div>
@@ -1692,7 +1692,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               onClick={handleOpenBulkMailModal}
               className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:opacity-90 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-sm"
             >
-              <span>ðŸ“§ Bulk Mail RFQs</span>
+              <span>📧 Bulk Mail RFQs</span>
             </button>
 
             <div className="h-4 w-px bg-amber-300 mx-1"></div>
@@ -1701,19 +1701,19 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
               onClick={() => handleBulkStatusChange('to_be_ordered')}
               className="px-2.5 py-1 bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-300 hover:bg-amber-200"
             >
-              Set ðŸŸ¡ To Order
+              Set 🟡 To Order
             </button>
             <button
               onClick={() => handleBulkStatusChange('ordered')}
               className="px-2.5 py-1 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-lg border border-blue-300 hover:bg-blue-200"
             >
-              Set ðŸ”µ Ordered
+              Set 🔵 Ordered
             </button>
             <button
               onClick={() => handleBulkStatusChange('delivered')}
               className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-300 hover:bg-emerald-200"
             >
-              Set ðŸŸ¢ Delivered
+              Set 🟢 Delivered
             </button>
           </div>
         )}
@@ -1746,9 +1746,9 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center gap-2">
-                      <span className="text-4xl opacity-30">ðŸ”</span>
+                      <span className="text-4xl opacity-30">🔍</span>
                       <p className="font-bold text-slate-600">No procurement items found</p>
-                      <p className="text-xs text-slate-400">Click "ðŸ“¥ Import CSV" or "Sync Inventory" to add items.</p>
+                      <p className="text-xs text-slate-400">Click "📥 Import CSV" or "Sync Inventory" to add items.</p>
                     </div>
                   </td>
                 </tr>
@@ -1786,12 +1786,12 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                             {/* Stock Alert Badge */}
                             {alertInfo?.isOutOfStock && !isIgnored && (
                               <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-300 animate-pulse">
-                                ðŸš¨ OUT OF STOCK
+                                🚨 OUT OF STOCK
                               </span>
                             )}
                             {alertInfo?.isLowStock && !alertInfo.isOutOfStock && !isIgnored && (
                               <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-300">
-                                âš ï¸ LOW STOCK ({alertInfo.currentQty} left)
+                                ⚠️ LOW STOCK ({alertInfo.currentQty} left)
                               </span>
                             )}
                           </div>
@@ -1811,7 +1811,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                               }`}
                               title={isIgnored ? "Click to re-enable low stock alerts for this item" : "Click to ignore alert / mark as do not replenish"}
                             >
-                              {isIgnored ? 'ðŸš« Ignored' : 'ðŸ”” Alert On'}
+                              {isIgnored ? '🚫 Ignored' : '🔔 Alert On'}
                             </button>
                           </div>
                         </div>
@@ -1820,7 +1820,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                       {/* Specification / Particulars */}
                       <td className="px-4 py-3.5 max-w-xs">
                         <p className="text-slate-700 font-medium line-clamp-2">
-                          {record.specification || 'â€” Standard Specification â€”'}
+                          {record.specification || '— Standard Specification —'}
                         </p>
                       </td>
 
@@ -1834,20 +1834,20 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                               className="font-bold text-slate-900 hover:text-emerald-700 flex items-center gap-1 transition-colors text-left cursor-pointer"
                               title="Filter list by this supplier"
                             >
-                              <span>ðŸ¢ {record.from_company || 'Unassigned Supplier'}</span>
+                              <span>🏢 {record.from_company || 'Unassigned Supplier'}</span>
                             </button>
                           </div>
 
                           {record.contact_name && (
-                            <p className="text-[11px] text-slate-500 font-medium">ðŸ‘¤ {record.contact_name}</p>
+                            <p className="text-[11px] text-slate-500 font-medium">👤 {record.contact_name}</p>
                           )}
 
                           {record.contact_number && (
-                            <p className="text-[11px] text-slate-500 font-medium">ðŸ“ž {record.contact_number}</p>
+                            <p className="text-[11px] text-slate-500 font-medium">📞 {record.contact_number}</p>
                           )}
 
                           {record.contact_email && (
-                            <p className="text-[11px] text-slate-500 font-medium truncate max-w-[180px]">âœ‰ï¸ {record.contact_email}</p>
+                            <p className="text-[11px] text-slate-500 font-medium truncate max-w-[180px]">✉️ {record.contact_email}</p>
                           )}
                         </div>
                       </td>
@@ -1855,40 +1855,40 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                       {/* Actions & Communication Triggers (Always Visible - On-Demand Particulars Fetching) */}
                       <td className="px-4 py-3.5">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {/* ðŸ”— Website */}
+                          {/* 🔗 Website */}
                           <button
                             onClick={() => handleActionClick(record, 'website')}
                             className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg border border-slate-300 flex items-center gap-1 transition-all"
                             title="Open Supplier Buying URL / Store Catalog (Fetches particulars on-demand)"
                           >
-                            <span>ðŸ”— Website</span>
+                            <span>🔗 Website</span>
                           </button>
 
-                          {/* ðŸ’¬ WhatsApp */}
+                          {/* 💬 WhatsApp */}
                           <button
                             onClick={() => handleActionClick(record, 'whatsapp')}
                             className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-2xs transition-all"
                             title="Send direct WhatsApp message to supplier (Fetches phone number on-demand)"
                           >
-                            <span>ðŸ’¬ WhatsApp</span>
+                            <span>💬 WhatsApp</span>
                           </button>
 
-                          {/* ðŸ“§ Webmail (Merged Direct Mail & Webmail) */}
+                          {/* 📧 Webmail (Merged Direct Mail & Webmail) */}
                           <button
                             onClick={() => handleActionClick(record, 'webmail')}
                             className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-2xs transition-all"
                             title="Open Internal Webmail Dispatcher (Fetches email contact on-demand)"
                           >
-                            <span>ðŸ“§ Email</span>
+                            <span>📧 Email</span>
                           </button>
 
-                          {/* âš¡ AI RFQ Generator */}
+                          {/* ⚡ AI RFQ Generator */}
                           <button
                             onClick={() => handleActionClick(record, 'ai_rfq')}
                             className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 text-[11px] font-extrabold rounded-lg border border-amber-400/40 flex items-center gap-1 transition-all"
                             title="Generate AI Request for Quotation text on-demand"
                           >
-                            <span>âš¡ AI RFQ</span>
+                            <span>⚡ AI RFQ</span>
                           </button>
                         </div>
                       </td>
@@ -1903,7 +1903,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                               title="Click to advance to 'Ordered'"
                             >
                               <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                              <span>ðŸŸ¡ To Be Ordered</span>
+                              <span>🟡 To Be Ordered</span>
                             </button>
                           )}
 
@@ -1914,7 +1914,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                               title="Click to mark as 'Delivered'"
                             >
                               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                              <span>ðŸ”µ Ordered</span>
+                              <span>🔵 Ordered</span>
                             </button>
                           )}
 
@@ -1925,7 +1925,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                               title="Click to reset to 'To Be Ordered'"
                             >
                               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                              <span>ðŸŸ¢ Delivered</span>
+                              <span>🟢 Delivered</span>
                             </button>
                           )}
 
@@ -1959,7 +1959,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                             className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
                             title="Edit procurement record details"
                           >
-                            âœï¸
+                            ✏️
                           </button>
                           <button
                             onClick={() => handleDelete(record.id)}
@@ -1987,12 +1987,12 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 text-left">
             <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-xl">ðŸ“¦</span>
+                <span className="text-xl">📦</span>
                 <h2 className="text-lg font-bold">
                   {editingRecord ? `Edit Item: ${editingRecord.item_name}` : 'New Procurement Requisition'}
                 </h2>
               </div>
-              <button onClick={() => { setIsAdding(false); setEditingRecord(null); }} className="text-slate-400 hover:text-white">âœ•</button>
+              <button onClick={() => { setIsAdding(false); setEditingRecord(null); }} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
@@ -2060,7 +2060,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                         className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 transition-colors"
                         title="Pre-select default registered supplier"
                       >
-                        âœ¨ Default: {defaultSupplierForCurrentItem.name}
+                        ✨ Default: {defaultSupplierForCurrentItem.name}
                       </button>
                     )}
                   </div>
@@ -2080,9 +2080,9 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                   >
-                    <option value="to_be_ordered">ðŸŸ¡ To Be Ordered (Warning Amber)</option>
-                    <option value="ordered">ðŸ”µ Ordered (Info Blue)</option>
-                    <option value="delivered">ðŸŸ¢ Delivered (Success Green)</option>
+                    <option value="to_be_ordered">🟡 To Be Ordered (Warning Amber)</option>
+                    <option value="ordered">🔵 Ordered (Info Blue)</option>
+                    <option value="delivered">🟢 Delivered (Success Green)</option>
                   </select>
                 </div>
               </div>
@@ -2152,16 +2152,16 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
         </div>
       )}
 
-      {/* MODAL 2: âš¡ AI RFQ TEXT PREVIEW & EDITOR */}
+      {/* MODAL 2: ⚡ AI RFQ TEXT PREVIEW & EDITOR */}
       {rfqModalItem && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 text-left">
             <div className="p-5 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 flex justify-between items-center font-bold">
               <div className="flex items-center gap-2">
-                <span className="text-xl">âš¡</span>
+                <span className="text-xl">⚡</span>
                 <h2 className="text-base font-black">AI Request for Quotation (RFQ) Generator</h2>
               </div>
-              <button onClick={() => setRfqModalItem(null)} className="text-slate-900 font-bold hover:text-white">âœ•</button>
+              <button onClick={() => setRfqModalItem(null)} className="text-slate-900 font-bold hover:text-white">✕</button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -2193,18 +2193,18 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 disabled={isGeneratingRfq}
                 className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
-                <span>ðŸ”„ Regenerate AI</span>
+                <span>🔄 Regenerate AI</span>
               </button>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(generatedRfqText);
-                    alert('âœ… RFQ text copied to clipboard!');
+                    alert('✅ RFQ text copied to clipboard!');
                   }}
                   className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all"
                 >
-                  ðŸ“‹ Copy Text
+                  📋 Copy Text
                 </button>
 
                 {rfqModalItem.contact_email && (
@@ -2218,7 +2218,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                     }}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5"
                   >
-                    <span>âœ‰ï¸ Send via Webmail</span>
+                    <span>✉️ Send via Webmail</span>
                   </button>
                 )}
               </div>
@@ -2227,16 +2227,16 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
         </div>
       )}
 
-      {/* MODAL 3: ðŸ“§ BULK MAIL RFQ DISPATCH */}
+      {/* MODAL 3: 📧 BULK MAIL RFQ DISPATCH */}
       {isBulkMailModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 text-left">
             <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex justify-between items-center font-bold">
               <div className="flex items-center gap-2">
-                <span className="text-xl">ðŸ“§</span>
+                <span className="text-xl">📧</span>
                 <h2 className="text-base font-black">Bulk Send RFQs ({selectedIds.length} Suppliers)</h2>
               </div>
-              <button onClick={() => setIsBulkMailModalOpen(false)} className="text-white hover:opacity-80">âœ•</button>
+              <button onClick={() => setIsBulkMailModalOpen(false)} className="text-white hover:opacity-80">✕</button>
             </div>
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -2250,14 +2250,14 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-bold text-slate-900 text-xs">{item.item_name}</span>
-                        <span className="text-slate-400 text-[11px] ml-2">({item.from_company || 'Supplier'} â€” {item.contact_email || 'No email'})</span>
+                        <span className="text-slate-400 text-[11px] ml-2">({item.from_company || 'Supplier'} — {item.contact_email || 'No email'})</span>
                       </div>
                       {item.contact_email ? (
                         <button
                           onClick={() => handleOpenWebmailIframe(item.contact_email || '', `RFQ: ${item.item_name} - Bluamp Energies`, bulkRfqTexts[item.id] || item.rfq_text)}
                           className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg shadow-xs flex items-center gap-1"
                         >
-                          <span>âœ‰ï¸ Send via Webmail</span>
+                          <span>✉️ Send via Webmail</span>
                         </button>
                       ) : (
                         <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">No Email Address</span>
@@ -2297,7 +2297,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 }}
                 className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5"
               >
-                <span>ðŸ“§ Launch Webmail Dispatcher</span>
+                <span>📧 Launch Webmail Dispatcher</span>
               </button>
             </div>
           </div>
@@ -2321,7 +2321,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors text-lg font-bold"
                 title="Close"
               >
-                âœ•
+                ✕
               </button>
             </div>
             <div className="flex-1 w-full h-full min-h-0 bg-white">
@@ -2335,13 +2335,13 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
         </div>
       )}
 
-      {/* MODAL 5: ðŸ“§ INTERNAL WEBMAIL DISPATCHER IFRAME */}
+      {/* MODAL 5: 📧 INTERNAL WEBMAIL DISPATCHER IFRAME */}
       {webmailIframeModal?.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
           <div className="bg-slate-900 rounded-2xl shadow-2xl w-[96vw] max-w-6xl h-[92vh] flex flex-col overflow-hidden border border-slate-700">
             <div className="p-3.5 bg-slate-900 text-white border-b border-slate-800 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-xl">ðŸ“§</span>
+                <span className="text-xl">📧</span>
                 <div>
                   <h2 className="text-sm font-black text-slate-100">Bluamp Energies Webmail Dispatcher</h2>
                   <p className="text-[11px] text-slate-400 font-medium">
@@ -2354,7 +2354,7 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
                 className="text-slate-400 hover:text-white p-1.5 text-lg font-bold transition-colors"
                 title="Close Dispatcher Modal"
               >
-                âœ•
+                ✕
               </button>
             </div>
             <div className="flex-1 bg-white relative overflow-hidden">
@@ -2373,4 +2373,3 @@ export const SuppliesRecord: React.FC<SuppliesRecordProps> = ({
 };
 
 export default SuppliesRecord;
-
